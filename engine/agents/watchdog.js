@@ -129,6 +129,7 @@ export function startInstantlyPoller() {
  */
 async function pollInstantly() {
   const since = await getLastPollTime();
+  const sinceDate = new Date(since);
   const now = new Date().toISOString();
 
   console.log(`[Watchdog] Polling Instantly for activity since ${since}`);
@@ -142,23 +143,27 @@ async function pollInstantly() {
     let unsubscribed = 0;
 
     for (const campaign of campaigns) {
-      const leads = await fetchCampaignLeads(campaign.id, since);
+      const leads = await fetchCampaignLeads(campaign.id);
 
       for (const lead of leads) {
         const email = lead.email?.toLowerCase();
         if (!email) continue;
 
-        // NOTE: Instantly v2 lead fields — verify against your API version:
-        // is_replied / has_replies  →  reply detection
-        // email_bounced             →  hard bounce
-        // is_unsubscribed           →  unsubscribe
-        if (lead.is_replied || lead.has_replies) {
+        // Instantly v2 lead fields (verified against API docs):
+        // email_reply_count + timestamp_last_reply  →  reply detection
+        // status === -1                             →  hard bounce
+        // status === -2                             →  unsubscribed
+        if (
+          lead.email_reply_count > 0 &&
+          lead.timestamp_last_reply &&
+          new Date(lead.timestamp_last_reply) > sinceDate
+        ) {
           await processReply(email, lead);
           replied++;
-        } else if (lead.email_bounced) {
+        } else if (lead.status === -1) {
           await processBounce(email);
           bounced++;
-        } else if (lead.is_unsubscribed) {
+        } else if (lead.status === -2) {
           await processUnsubscribe(email, lead);
           unsubscribed++;
         }
@@ -181,17 +186,16 @@ async function pollInstantly() {
 
 /**
  * Returns all campaigns from Instantly.
- * NOTE: Verify endpoint path against your Instantly API version.
+ * GET /api/v2/campaigns — returns { items: [...] }
  */
 async function fetchInstantlyCampaigns() {
   try {
-    const { data } = await axios.get(`${INSTANTLY_BASE}/campaign`, {
+    const { data } = await axios.get(`${INSTANTLY_BASE}/campaigns`, {
       headers: iHeaders(),
-      params: { limit: 100, skip: 0 },
+      params: { limit: 100 },
       timeout: 15000,
     });
-    // Response shape: { data: [...] } or directly an array
-    return data?.data || data || [];
+    return data?.items || [];
   } catch (err) {
     console.error(`[Watchdog] Failed to fetch Instantly campaigns: ${err.message}`);
     return [];
@@ -199,33 +203,32 @@ async function fetchInstantlyCampaigns() {
 }
 
 /**
- * Returns leads for one campaign updated after `since` (ISO timestamp).
- * Paginates through all pages.
+ * Returns all leads for one Instantly campaign.
+ * POST /api/v2/leads — cursor-based pagination via starting_after / next_starting_after.
  */
-async function fetchCampaignLeads(campaignId, since) {
+async function fetchCampaignLeads(campaignId) {
   const results = [];
-  let skip = 0;
+  let startingAfter = null;
   const limit = 100;
 
   while (true) {
     try {
-      const { data } = await axios.get(`${INSTANTLY_BASE}/leads`, {
+      const body = {
+        campaign: campaignId,
+        limit,
+        ...(startingAfter && { starting_after: startingAfter }),
+      };
+
+      const { data } = await axios.post(`${INSTANTLY_BASE}/leads`, body, {
         headers: iHeaders(),
-        params: {
-          campaign_id: campaignId,
-          limit,
-          skip,
-          // NOTE: Instantly may use updated_at_min or a similar filter name
-          updated_at_min: since,
-        },
         timeout: 15000,
       });
 
-      const page = data?.data || data?.leads || [];
+      const page = data?.items || [];
       results.push(...page);
 
-      if (page.length < limit) break;
-      skip += limit;
+      if (page.length < limit || !data?.next_starting_after) break;
+      startingAfter = data.next_starting_after;
     } catch (err) {
       console.error(`[Watchdog] Failed to fetch leads for campaign ${campaignId}: ${err.message}`);
       break;
@@ -237,13 +240,13 @@ async function fetchCampaignLeads(campaignId, since) {
 
 /**
  * Adds an email to Instantly's global block list, stopping all future outreach.
- * NOTE: Verify endpoint against your Instantly API version.
+ * POST /api/v2/block-lists-entries/bulk-create — body: { bl_values: [email] }
  */
 async function blockInInstantly(email) {
   try {
     await axios.post(
-      `${INSTANTLY_BASE}/blocklist/add`,
-      { emails: [email] },
+      `${INSTANTLY_BASE}/block-lists-entries/bulk-create`,
+      { bl_values: [email] },
       { headers: iHeaders(), timeout: 8000 }
     );
     console.log(`[Watchdog] Blocked in Instantly: ${email}`);
