@@ -1,21 +1,17 @@
 /**
  * watchdog.js — Conversion & Reply Monitor
  *
- * Listens for two signals that mean we should stop outreach to a prospect:
- *   1. A Stripe payment event — prospect became a paying client
- *   2. A positive Saleshandy reply event — prospect replied to an email
+ * Handles two signals that mean we should stop outreach to a prospect:
+ *   1. Stripe webhook events — payment and subscription lifecycle.
+ *      handleStripeEvent() is called by api/stripe-webhook.js.
  *
- * When either fires, Watchdog:
- *   - Updates the prospect's status in Supabase ('converted' or 'replied')
- *   - Calls the Saleshandy API to remove them from active sequences
- *   - Logs an event to the events table
- *
- * This module exports handlers that are called by the webhook API routes.
- * It does NOT start its own HTTP server — see api/stripe-webhook.js and
- * api/saleshandy-webhook.js for the Express routes that call these handlers.
+ *   2. Instantly reply / bounce / unsubscribe events — polled every 2 hours
+ *      directly from the Instantly API. No inbound webhook needed.
+ *      startInstantlyPoller() is called by api/server.js on boot.
  */
 
 import axios from 'axios';
+import cron from 'node-cron';
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
 
@@ -25,20 +21,20 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const SH_BASE = 'https://api.saleshandy.com/api/v1';
-const shHeaders = () => ({
-  'X-Auth-Token': process.env.SALESHANDY_API_KEY,
+const INSTANTLY_BASE = 'https://api.instantly.ai/api/v2';
+const iHeaders = () => ({
+  Authorization: `Bearer ${process.env.INSTANTLY_API_KEY}`,
   'Content-Type': 'application/json',
 });
+
+// How far back to look on the very first poll (before any saved timestamp)
+const INITIAL_LOOKBACK_HOURS = 3;
 
 
 // ─── Stripe event handler ─────────────────────────────────────────────────────
 
 /**
  * Called by api/stripe-webhook.js when a Stripe event is received.
- * Handles payment and subscription lifecycle events.
- *
- * @param {object} event - Verified Stripe event object
  */
 export async function handleStripeEvent(event) {
   console.log(`[Watchdog] Stripe event: ${event.type}`);
@@ -46,29 +42,21 @@ export async function handleStripeEvent(event) {
   switch (event.type) {
     case 'checkout.session.completed':
     case 'invoice.payment_succeeded': {
-      // A new client paid or renewed — update billing status
       const customerId =
         event.data.object.customer || event.data.object.customer_id;
       await handlePaymentSuccess(customerId, event);
       break;
     }
-
     case 'customer.subscription.deleted':
     case 'invoice.payment_failed': {
-      // Subscription cancelled or payment failed
-      const customerId = event.data.object.customer;
-      await handleSubscriptionEnd(customerId, event);
+      await handleSubscriptionEnd(event.data.object.customer, event);
       break;
     }
-
     default:
-      console.log(`[Watchdog] Unhandled Stripe event type: ${event.type}`);
+      console.log(`[Watchdog] Unhandled Stripe event: ${event.type}`);
   }
 }
 
-/**
- * A client's payment succeeded — mark them as active.
- */
 async function handlePaymentSuccess(stripeCustomerId, event) {
   const { data: client } = await supabase
     .from('clients')
@@ -77,8 +65,7 @@ async function handlePaymentSuccess(stripeCustomerId, event) {
     .single();
 
   if (!client) {
-    // First payment — client record may not exist yet (created by onboarding flow)
-    console.log(`[Watchdog] No client found for Stripe customer ${stripeCustomerId}`);
+    console.log(`[Watchdog] No client for Stripe customer ${stripeCustomerId}`);
     return;
   }
 
@@ -96,9 +83,6 @@ async function handlePaymentSuccess(stripeCustomerId, event) {
   console.log(`[Watchdog] Payment confirmed for client: ${client.name}`);
 }
 
-/**
- * A subscription ended — pause the client and their outreach.
- */
 async function handleSubscriptionEnd(stripeCustomerId, event) {
   const { data: client } = await supabase
     .from('clients')
@@ -125,103 +109,192 @@ async function handleSubscriptionEnd(stripeCustomerId, event) {
 }
 
 
-// ─── Saleshandy reply handler ─────────────────────────────────────────────────
+// ─── Instantly poller ─────────────────────────────────────────────────────────
 
 /**
- * Called by api/saleshandy-webhook.js when a Saleshandy event fires.
- * Handles replies, bounces, and unsubscribes.
- *
- * @param {object} payload - Raw webhook payload from Saleshandy
+ * Starts a cron job that polls Instantly every 2 hours.
+ * Call this once from api/server.js on boot.
  */
-export async function handleSaleshandyEvent(payload) {
-  const { event, data } = payload;
-  console.log(`[Watchdog] Saleshandy event: ${event}`);
+export function startInstantlyPoller() {
+  console.log('[Watchdog] Instantly poller starting — runs every 2 hours.');
 
-  switch (event) {
-    case 'email_replied':
-      await handleReply(data);
-      break;
+  // Run immediately on boot, then every 2 hours
+  pollInstantly();
+  cron.schedule('0 */2 * * *', pollInstantly);
+}
 
-    case 'email_bounced':
-      await handleBounce(data);
-      break;
+/**
+ * Polls all Instantly campaigns for leads that have replied, bounced,
+ * or unsubscribed since the last poll. Updates Supabase accordingly.
+ */
+async function pollInstantly() {
+  const since = await getLastPollTime();
+  const now = new Date().toISOString();
 
-    case 'email_unsubscribed':
-      await handleUnsubscribe(data);
-      break;
+  console.log(`[Watchdog] Polling Instantly for activity since ${since}`);
 
-    default:
-      console.log(`[Watchdog] Unhandled Saleshandy event: ${event}`);
+  try {
+    const campaigns = await fetchInstantlyCampaigns();
+    console.log(`[Watchdog] Found ${campaigns.length} Instantly campaign(s).`);
+
+    let replied = 0;
+    let bounced = 0;
+    let unsubscribed = 0;
+
+    for (const campaign of campaigns) {
+      const leads = await fetchCampaignLeads(campaign.id, since);
+
+      for (const lead of leads) {
+        const email = lead.email?.toLowerCase();
+        if (!email) continue;
+
+        // NOTE: Instantly v2 lead fields — verify against your API version:
+        // is_replied / has_replies  →  reply detection
+        // email_bounced             →  hard bounce
+        // is_unsubscribed           →  unsubscribe
+        if (lead.is_replied || lead.has_replies) {
+          await processReply(email, lead);
+          replied++;
+        } else if (lead.email_bounced) {
+          await processBounce(email);
+          bounced++;
+        } else if (lead.is_unsubscribed) {
+          await processUnsubscribe(email, lead);
+          unsubscribed++;
+        }
+      }
+    }
+
+    console.log(
+      `[Watchdog] Poll done — ${replied} replies, ${bounced} bounces, ${unsubscribed} unsubscribes.`
+    );
+
+    // Stamp the successful poll time
+    await logEvent(null, null, 'watchdog.polled', { since, campaigns: campaigns.length });
+  } catch (err) {
+    console.error(`[Watchdog] Poll error: ${err.message}`);
+  }
+}
+
+
+// ─── Instantly API calls ──────────────────────────────────────────────────────
+
+/**
+ * Returns all campaigns from Instantly.
+ * NOTE: Verify endpoint path against your Instantly API version.
+ */
+async function fetchInstantlyCampaigns() {
+  try {
+    const { data } = await axios.get(`${INSTANTLY_BASE}/campaign`, {
+      headers: iHeaders(),
+      params: { limit: 100, skip: 0 },
+      timeout: 15000,
+    });
+    // Response shape: { data: [...] } or directly an array
+    return data?.data || data || [];
+  } catch (err) {
+    console.error(`[Watchdog] Failed to fetch Instantly campaigns: ${err.message}`);
+    return [];
   }
 }
 
 /**
- * A prospect replied to an email — stop all further outreach.
+ * Returns leads for one campaign updated after `since` (ISO timestamp).
+ * Paginates through all pages.
  */
-async function handleReply(data) {
-  const email = data?.lead_email || data?.email;
-  if (!email) {
-    console.warn('[Watchdog] Reply event missing email address.');
-    return;
+async function fetchCampaignLeads(campaignId, since) {
+  const results = [];
+  let skip = 0;
+  const limit = 100;
+
+  while (true) {
+    try {
+      const { data } = await axios.get(`${INSTANTLY_BASE}/leads`, {
+        headers: iHeaders(),
+        params: {
+          campaign_id: campaignId,
+          limit,
+          skip,
+          // NOTE: Instantly may use updated_at_min or a similar filter name
+          updated_at_min: since,
+        },
+        timeout: 15000,
+      });
+
+      const page = data?.data || data?.leads || [];
+      results.push(...page);
+
+      if (page.length < limit) break;
+      skip += limit;
+    } catch (err) {
+      console.error(`[Watchdog] Failed to fetch leads for campaign ${campaignId}: ${err.message}`);
+      break;
+    }
   }
 
-  // Find the prospect by email across all clients
+  return results;
+}
+
+/**
+ * Adds an email to Instantly's global block list, stopping all future outreach.
+ * NOTE: Verify endpoint against your Instantly API version.
+ */
+async function blockInInstantly(email) {
+  try {
+    await axios.post(
+      `${INSTANTLY_BASE}/blocklist/add`,
+      { emails: [email] },
+      { headers: iHeaders(), timeout: 8000 }
+    );
+    console.log(`[Watchdog] Blocked in Instantly: ${email}`);
+  } catch (err) {
+    // Non-fatal — email may already be blocked
+    console.warn(`[Watchdog] Could not block ${email} in Instantly: ${err.message}`);
+  }
+}
+
+
+// ─── Lead event processors ────────────────────────────────────────────────────
+
+async function processReply(email, lead) {
   const { data: prospect } = await supabase
     .from('prospects')
-    .select('id, client_id, business_name, status')
-    .eq('email', email.toLowerCase())
-    .neq('status', 'replied')
-    .neq('status', 'converted')
+    .select('id, client_id, business_name')
+    .eq('email', email)
+    .not('status', 'in', '("replied","converted")')
     .maybeSingle();
 
-  if (!prospect) {
-    console.log(`[Watchdog] No active prospect found for reply from: ${email}`);
-    return;
-  }
+  if (!prospect) return;
 
-  // Update prospect status
   await supabase
     .from('prospects')
     .update({ status: 'replied' })
     .eq('id', prospect.id);
 
-  // Remove from Saleshandy sequence so no more follow-ups fire
-  await stopSaleshandyOutreach(email, data);
+  await blockInInstantly(email);
 
   await logEvent(prospect.client_id, prospect.id, 'reply.received', {
     email,
-    saleshandy_data: data,
+    instantly_lead: lead,
   });
 
-  console.log(`[Watchdog] Reply received — outreach stopped for: ${prospect.business_name}`);
+  console.log(`[Watchdog] Reply — stopped outreach for: ${prospect.business_name}`);
 }
 
-/**
- * An email hard-bounced — mark the prospect so we don't retry.
- */
-async function handleBounce(data) {
-  const email = data?.lead_email || data?.email;
-  if (!email) return;
-
-  await supabase
+async function processBounce(email) {
+  const { error } = await supabase
     .from('prospects')
     .update({ status: 'bounced' })
-    .eq('email', email.toLowerCase());
+    .eq('email', email);
 
-  console.log(`[Watchdog] Bounce recorded for: ${email}`);
+  if (!error) console.log(`[Watchdog] Bounce recorded for: ${email}`);
 }
 
-/**
- * A prospect unsubscribed — stop all outreach and mark permanently.
- */
-async function handleUnsubscribe(data) {
-  const email = data?.lead_email || data?.email;
-  if (!email) return;
-
+async function processUnsubscribe(email, lead) {
   const { data: prospect } = await supabase
     .from('prospects')
     .select('id, client_id, business_name')
-    .eq('email', email.toLowerCase())
+    .eq('email', email)
     .maybeSingle();
 
   if (!prospect) return;
@@ -231,37 +304,37 @@ async function handleUnsubscribe(data) {
     .update({ status: 'unsubscribed' })
     .eq('id', prospect.id);
 
-  await stopSaleshandyOutreach(email, data);
+  await blockInInstantly(email);
 
   await logEvent(prospect.client_id, prospect.id, 'outreach.stopped', {
     reason: 'unsubscribed',
     email,
+    instantly_lead: lead,
   });
 
-  console.log(`[Watchdog] Unsubscribe — outreach stopped for: ${prospect.business_name}`);
+  console.log(`[Watchdog] Unsubscribe — stopped outreach for: ${prospect.business_name}`);
 }
 
 
-// ─── Saleshandy: stop outreach for a lead ────────────────────────────────────
+// ─── Poll timestamp ───────────────────────────────────────────────────────────
 
 /**
- * Removes a lead from all active Saleshandy campaigns/sequences.
- * Saleshandy doesn't have a single "stop all" endpoint, so we
- * add the email to a global block list via their unsubscribe API.
+ * Returns the ISO timestamp of the last successful poll.
+ * Falls back to INITIAL_LOOKBACK_HOURS ago if no prior poll found.
  */
-async function stopSaleshandyOutreach(email, data) {
-  try {
-    // Use Saleshandy's unsubscribe endpoint to globally block this email
-    await axios.post(
-      `${SH_BASE}/unsubscribe`,
-      { email },
-      { headers: shHeaders(), timeout: 8000 }
-    );
-    console.log(`[Watchdog] Saleshandy unsubscribe posted for: ${email}`);
-  } catch (err) {
-    // Non-fatal — log and continue. Email may already be unsubscribed.
-    console.warn(`[Watchdog] Could not unsubscribe ${email} from Saleshandy: ${err.message}`);
-  }
+async function getLastPollTime() {
+  const { data } = await supabase
+    .from('events')
+    .select('created_at')
+    .eq('type', 'watchdog.polled')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (data?.created_at) return data.created_at;
+
+  const fallback = new Date(Date.now() - INITIAL_LOOKBACK_HOURS * 60 * 60 * 1000);
+  return fallback.toISOString();
 }
 
 
@@ -274,5 +347,18 @@ async function logEvent(clientId, prospectId, type, payload) {
     type,
     payload,
     source: 'watchdog',
+  });
+}
+
+
+// ─── CLI entry point ──────────────────────────────────────────────────────────
+
+if (process.argv[1].endsWith('watchdog.js')) {
+  console.log('[Watchdog] Running standalone — polling Instantly every 2 hours.');
+  startInstantlyPoller();
+  // Keep the process alive
+  process.on('SIGINT', () => {
+    console.log('[Watchdog] Shutting down.');
+    process.exit(0);
   });
 }

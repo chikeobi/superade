@@ -1,8 +1,8 @@
 /**
  * api/server.js — Webhook HTTP Server
  *
- * Starts a minimal Express server that receives webhooks from
- * Stripe and Saleshandy.
+ * Starts a minimal Express server that receives webhooks from Stripe,
+ * and boots the Instantly poller (reply / bounce / unsubscribe detection).
  *
  * Run with: node api/server.js
  *
@@ -12,7 +12,7 @@
 
 import express from 'express';
 import { stripeWebhookHandler } from './stripe-webhook.js';
-import { saleshandyWebhookHandler } from './saleshandy-webhook.js';
+import { startInstantlyPoller } from '../agents/watchdog.js';
 import 'dotenv/config';
 
 const app = express();
@@ -25,13 +25,6 @@ app.post(
   stripeWebhookHandler
 );
 
-// ─── Saleshandy webhook: regular JSON body ────────────────────────────────────
-app.post(
-  '/webhooks/saleshandy',
-  express.json(),
-  saleshandyWebhookHandler
-);
-
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', ts: new Date().toISOString() });
@@ -40,6 +33,8 @@ app.get('/health', (_req, res) => {
 // ─── Start ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`[Server] Webhook server listening on port ${PORT}`);
-  console.log(`[Server] Stripe endpoint:     POST /webhooks/stripe`);
-  console.log(`[Server] Saleshandy endpoint: POST /webhooks/saleshandy`);
+  console.log(`[Server] Stripe endpoint: POST /webhooks/stripe`);
+
+  // Start polling Instantly for replies/bounces/unsubscribes every 2 hours
+  startInstantlyPoller();
 });
