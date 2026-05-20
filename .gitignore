@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Environment — never commit real secrets
+engine/.env
+.env
+
+# Generated output
+engine/reports/
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Playwright browser binaries
+engine/playwright-report/
+engine/test-results/

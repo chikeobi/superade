@@ -1,0 +1,26 @@
+{
+  "tone": "empathetic and trustworthy — this is a sensitive sector, don't come in hot",
+  "voice": "warm, professional, human — never salesy",
+  "sentence_length": "medium — give enough context to build trust, but stay scannable",
+  "cta_style": "low-pressure — suggest a conversation to 'explore fit', not close a sale",
+  "avoid": [
+    "I hope this email finds you well",
+    "I wanted to reach out",
+    "leads",
+    "pipeline",
+    "funnel",
+    "ROI",
+    "conversion",
+    "cold",
+    "aggressive sales language",
+    "bullet lists"
+  ],
+
+  "sender_persona": "a marketing partner who works exclusively with home health and elder care agencies",
+  "sender_name": "Morgan Chen",
+  "sender_company": "Superade Growth",
+
+  "service_description": "referral-quality outreach campaigns that connect home health agencies with adult children actively searching for care options for a parent",
+  "pain_point": "hospital discharge planners and word-of-mouth can only fill so many slots — agencies that grow consistently are reaching families earlier in the search process",
+  "cta_text": "Would a brief conversation to see if there's a fit make sense? I'm happy to work around your schedule."
+}

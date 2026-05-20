@@ -1,0 +1,31 @@
+{
+  "name": "superade-engine",
+  "version": "1.0.0",
+  "description": "Superade agentic outreach engine",
+  "type": "module",
+  "scripts": {
+    "run": "node scripts/run.js",
+    "approve": "node scripts/approve.js",
+    "scout": "node agents/scout.js",
+    "brain": "node agents/brain.js",
+    "connector": "node agents/connector.js",
+    "watchdog": "node agents/watchdog.js",
+    "reporter": "node scripts/reporter.js",
+    "api": "node api/server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5",
+    "playwright": "^1.47.0",
+    "stripe": "^16.10.0",
+    "express": "^4.21.0",
+    "puppeteer-extra": "^3.3.6",
+    "pdf-lib": "^1.17.1",
+    "node-cron": "^3.0.3",
+    "axios": "^1.7.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

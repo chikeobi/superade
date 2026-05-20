@@ -1,0 +1,23 @@
+{
+  "tone": "professional and data-driven — respect that they understand sales metrics",
+  "voice": "confident, peer-to-peer, numbers-oriented",
+  "sentence_length": "short and punchy — they're busy people",
+  "cta_style": "direct — offer a specific outcome ('I can show you how 3 dealerships near you doubled their service appointments')",
+  "avoid": [
+    "I hope this email finds you well",
+    "I wanted to reach out",
+    "revolutionary",
+    "cutting-edge",
+    "disruptive",
+    "bullet point lists",
+    "passive voice"
+  ],
+
+  "sender_persona": "a B2B marketing consultant who specializes in automotive retail",
+  "sender_name": "Jordan Mills",
+  "sender_company": "Superade Growth",
+
+  "service_description": "cold email campaigns that generate pre-qualified service and sales appointment requests directly from local car owners",
+  "pain_point": "floor traffic is declining across the board — dealerships that are winning are the ones generating demand online, not waiting for walk-ins",
+  "cta_text": "Can I show you how we're doing this for 3 similar dealerships in your region? Takes 15 minutes."
+}

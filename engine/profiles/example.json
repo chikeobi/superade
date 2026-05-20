@@ -1,0 +1,28 @@
+{
+  "_comment": "Example style profile — copy this file and customize for each client.",
+
+  "tone": "friendly and direct — like a neighbor who happens to know marketing",
+  "voice": "conversational, first-person, warm but not sycophantic",
+  "sentence_length": "short to medium — max 2 clauses per sentence",
+  "cta_style": "single soft CTA — ask for a 15-minute call, not a demo or purchase",
+  "avoid": [
+    "I hope this email finds you well",
+    "I wanted to reach out",
+    "synergy",
+    "leverage",
+    "game-changer",
+    "at the end of the day",
+    "touching base",
+    "circle back",
+    "bullet point lists in the email body",
+    "corporate-speak"
+  ],
+
+  "sender_persona": "a growth consultant who works with local home service businesses",
+  "sender_name": "Alex Rivera",
+  "sender_company": "Superade Growth",
+
+  "service_description": "done-for-you cold email outreach that books discovery calls with qualified leads every month",
+  "pain_point": "most local service businesses get all their leads from referrals and word of mouth — which works until it doesn't",
+  "cta_text": "Would you be open to a quick 15-minute call this week to see if it's a fit?"
+}
