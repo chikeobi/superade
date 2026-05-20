@@ -13,14 +13,10 @@
  */
 
 import axios from 'axios';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase.js';
 import 'dotenv/config';
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
 
 // Saleshandy base URL and auth header
 const SH_BASE = 'https://api.saleshandy.com/api/v1';

@@ -15,16 +15,11 @@
  *   3. node scripts/run.js        (Connector pushes approved emails to Saleshandy)
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase.js';
 import { runScout } from '../agents/scout.js';
 import { runBrain } from '../agents/brain.js';
 import { runConnector } from '../agents/connector.js';
 import 'dotenv/config';
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
 
 
 // ─── Main ─────────────────────────────────────────────────────────────────────

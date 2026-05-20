@@ -12,14 +12,10 @@
 
 import axios from 'axios';
 import cron from 'node-cron';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase.js';
 import 'dotenv/config';
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
 
 const INSTANTLY_BASE = 'https://api.instantly.ai/api/v2';
 const iHeaders = () => ({

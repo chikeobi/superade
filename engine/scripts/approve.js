@@ -11,14 +11,9 @@
  * Keys: [A] Approve  [R] Reject  [S] Skip  [Q] Quit
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase.js';
 import * as readline from 'readline';
 import 'dotenv/config';
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
 
 const BATCH_SIZE = 100;
 

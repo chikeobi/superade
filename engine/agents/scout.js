@@ -12,14 +12,8 @@
  */
 
 import { chromium } from 'playwright';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase.js';
 import 'dotenv/config';
-
-// ─── Supabase client (service role — full DB access) ─────────────────────────
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
 
 const HEADLESS = process.env.PLAYWRIGHT_HEADLESS !== 'false';
 

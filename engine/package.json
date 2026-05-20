@@ -23,7 +23,8 @@
     "puppeteer-extra": "^3.3.6",
     "pdf-lib": "^1.17.1",
     "node-cron": "^3.0.3",
-    "axios": "^1.7.7"
+    "axios": "^1.7.7",
+    "ws": "^8.18.0"
   },
   "engines": {
     "node": ">=18.0.0"
