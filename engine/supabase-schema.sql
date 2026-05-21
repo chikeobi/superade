@@ -219,14 +219,44 @@ create index events_prospect on events(prospect_id);
 
 -- ============================================================
 -- ROW LEVEL SECURITY
--- Disable RLS on all tables — this DB is only accessed via
--- the service role key from the backend. Never expose to clients.
+-- Enabled with no policies — the service role key bypasses RLS
+-- automatically, so the backend is unaffected. This ensures the
+-- anon key can never read or write any table even if leaked.
 -- ============================================================
-alter table clients      disable row level security;
-alter table prospects    disable row level security;
-alter table campaigns    disable row level security;
-alter table emails       disable row level security;
-alter table events       disable row level security;
+alter table clients      enable row level security;
+alter table prospects    enable row level security;
+alter table campaigns    enable row level security;
+alter table emails       enable row level security;
+alter table events       enable row level security;
+
+
+-- ============================================================
+-- AGENT STATES
+-- One row per agent (outbound + inbound). Tracks schedule,
+-- enabled/disabled toggle, and last run status.
+-- Seed rows are inserted via the Supabase dashboard or a
+-- separate seed script — this table is never auto-created.
+-- ============================================================
+create table if not exists agent_states (
+  id                text primary key,           -- e.g. 'outbound.scout'
+  system            text not null               -- 'outbound' | 'inbound'
+                      check (system in ('outbound', 'inbound')),
+  name              text not null,
+  description       text,
+  enabled           boolean not null default false,
+  always_on         boolean not null default false,
+  schedule_type     text not null default 'manual'
+                      check (schedule_type in ('manual', 'interval', 'daily')),
+  schedule_value    text,                        -- hours for interval; hour-of-day for daily
+  last_run_at       timestamptz,
+  last_run_status   text check (last_run_status in ('running', 'success', 'failed')),
+  last_run_message  text,
+  updated_at        timestamptz not null default now()
+);
+
+alter table agent_states enable row level security;
+
+create index if not exists agent_states_system on agent_states(system);
 
 
 -- ============================================================

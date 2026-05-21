@@ -190,6 +190,16 @@ async function runAgent(agentId) {
   const script = AGENT_SCRIPTS[agentId];
   if (!script) return;
 
+  // Guard: re-read DB status before spawning to prevent double-runs when the
+  // scheduler tick and a manual "Run Now" click race, or when a detached child
+  // from a previous server instance is still running and has not yet written back.
+  const { data: current } = await supabase
+    .from('agent_states').select('last_run_status').eq('id', agentId).single();
+  if (current?.last_run_status === 'running') {
+    console.log(`[agents:inbound] ${agentId} already running — skipping spawn.`);
+    return;
+  }
+
   await supabase.from('agent_states').update({
     last_run_at:      new Date().toISOString(),
     last_run_status:  'running',

@@ -63,13 +63,17 @@ export async function runConnector(clientId, campaignId) {
   const { data: clientData } = await supabase
     .from('clients').select('daily_send_limit').eq('id', clientId).single();
   const dailyLimit = clientData?.daily_send_limit ?? 100;
-  const todayUTC   = new Date().toISOString().slice(0, 10);
+  // Daily limit resets at midnight ET, not midnight UTC (UTC resets at 7-8pm ET)
+  const todayET  = new Date().toLocaleDateString('sv', { timeZone: 'America/New_York' }); // YYYY-MM-DD
+  const etHour   = +new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false, hourCycle: 'h23' });
+  const offsetH  = (new Date().getUTCHours() - etHour + 24) % 24; // 4 (EDT) or 5 (EST)
+  const sinceET  = `${todayET}T${String(offsetH).padStart(2, '0')}:00:00Z`;
   const { count: sentToday } = await supabase
     .from('emails')
     .select('id', { count: 'exact', head: true })
     .eq('campaign_id', campaignId)
     .eq('status', 'sent')
-    .gte('sent_at', `${todayUTC}T00:00:00Z`);
+    .gte('sent_at', sinceET);
   const canSend = Math.max(0, dailyLimit - (sentToday || 0));
   if (canSend === 0) {
     console.log(`[Connector] Daily send limit (${dailyLimit}) reached — skipping.`);

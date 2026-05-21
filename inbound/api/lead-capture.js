@@ -15,7 +15,7 @@ import express from 'express';
 import { supabase } from '../lib/supabase.js';
 import { sendOperatorLeadAlert, sendVendorLeadAlert } from '../lib/mailer.js';
 
-const up = express.urlencoded({ extended: false });
+const up = express.urlencoded({ extended: false, limit: '10kb' });
 
 export function registerCaptureRoutes(router) {
   router.post('/capture', up, captureHandler);
