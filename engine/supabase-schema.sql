@@ -31,15 +31,45 @@ create table clients (
   -- Outreach config
   style_profile   text not null default 'example',
   -- References a file in /profiles/*.json by name (without .json)
-  target_niche    text,         -- e.g. "HVAC", "plumbing", "landscaping"
+  target_niche    text[],       -- e.g. ARRAY['HVAC','plumbing','landscaping']
   target_states   text[],       -- e.g. ARRAY['TX','FL','GA']
+  target_cities   jsonb,        -- e.g. [{"zip":"77002","miles":25}] — overrides state targeting when set
   monthly_quota   int not null default 500,
   prospects_sent_this_month int not null default 0,
   quota_reset_at  timestamptz,
 
+  -- Send limits
+  daily_send_limit int not null default 100,
+  -- Max emails Connector will push per day for this client
+
+  -- Automated scheduler
+  schedule_start_date  date,
+  -- First day to run the Scout→Brain→Connector pipeline
+  schedule_days        int,
+  -- How many consecutive days to run
+  schedule_run_hour    int not null default 8,
+  -- Local hour (0-23) at which the scheduler fires
+  schedule_timezone    text not null default 'America/New_York',
+  -- IANA timezone string, e.g. "America/Los_Angeles"
+  schedule_active      boolean not null default false,
+  -- Must be true for the scheduler to fire
+
   -- Flags
-  is_paused       boolean not null default false
+  is_paused       boolean not null default false,
+  is_internal     boolean not null default false
+  -- is_internal = true for accounts created via admin dashboard (no Stripe)
 );
+
+-- ── Run these ALTER TABLE statements in Supabase SQL editor if the table
+-- ── already exists (schema was created before this revision):
+--
+-- ALTER TABLE clients ADD COLUMN daily_send_limit int NOT NULL DEFAULT 100;
+-- ALTER TABLE clients ADD COLUMN schedule_start_date date;
+-- ALTER TABLE clients ADD COLUMN schedule_days int;
+-- ALTER TABLE clients ADD COLUMN schedule_run_hour int NOT NULL DEFAULT 8;
+-- ALTER TABLE clients ADD COLUMN schedule_timezone text NOT NULL DEFAULT 'America/New_York';
+-- ALTER TABLE clients ADD COLUMN schedule_active boolean NOT NULL DEFAULT false;
+-- ALTER TABLE clients ADD COLUMN target_cities jsonb;
 
 
 -- ============================================================
@@ -204,9 +234,11 @@ alter table events       disable row level security;
 -- Call this with a cron job or from reporter.js at month start.
 -- ============================================================
 create or replace function reset_monthly_quotas()
-returns void language plpgsql as $$
+returns void language plpgsql
+set search_path = ''
+as $$
 begin
-  update clients
+  update public.clients
   set
     prospects_sent_this_month = 0,
     quota_reset_at = now()
@@ -220,9 +252,11 @@ $$;
 -- Called by connector.js after each successful Instantly push.
 -- ============================================================
 create or replace function increment_prospects_sent(p_client_id uuid, p_count int)
-returns void language plpgsql as $$
+returns void language plpgsql
+set search_path = ''
+as $$
 begin
-  update clients
+  update public.clients
   set prospects_sent_this_month = prospects_sent_this_month + p_count
   where id = p_client_id;
 end;

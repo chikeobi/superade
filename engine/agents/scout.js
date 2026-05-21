@@ -30,12 +30,14 @@ const randomDelay = (min = 1500, max = 3500) =>
 
 /**
  * Run the Scout agent for one client.
- * @param {string} clientId  - Supabase client UUID
- * @param {string} niche     - Business type, e.g. "plumbing"
- * @param {string} state     - US state abbreviation, e.g. "TX"
+ * @param {string} clientId          - Supabase client UUID
+ * @param {string} niche             - Business type, e.g. "plumbing"
+ * @param {string|null} state        - US state abbreviation, e.g. "TX" (used when no cityTarget)
+ * @param {{zip:string,miles:number}|null} cityTarget - City-level targeting; overrides state when set
  */
-export async function runScout(clientId, niche, state) {
-  console.log(`[Scout] Starting — client=${clientId} niche=${niche} state=${state}`);
+export async function runScout(clientId, niche, state, cityTarget = null) {
+  const locationLabel = cityTarget ? `ZIP ${cityTarget.zip} (${cityTarget.miles} mi)` : state;
+  console.log(`[Scout] Starting — client=${clientId} niche=${niche} location=${locationLabel}`);
 
   // Verify the client exists and is active
   const { data: client, error: clientErr } = await supabase
@@ -72,13 +74,16 @@ export async function runScout(clientId, niche, state) {
       '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   });
 
+  // Resolve search location: ZIP code string for city targeting, state abbr otherwise
+  const searchLocation = cityTarget ? cityTarget.zip : state;
+
   let totalSaved = 0;
 
   try {
     // Run both scrapers and collect results
     const [googleResults, yelpResults] = await Promise.allSettled([
-      scrapeGoogleMaps(context, niche, state, limit),
-      scrapeYelp(context, niche, state, limit),
+      scrapeGoogleMaps(context, niche, searchLocation, limit),
+      scrapeYelp(context, niche, searchLocation, limit),
     ]);
 
     const prospects = [
@@ -100,7 +105,7 @@ export async function runScout(clientId, niche, state) {
     // Log the scouting run as an event
     await logEvent(clientId, null, 'prospect.batch_discovered', {
       niche,
-      state,
+      ...(cityTarget ? { zip: cityTarget.zip, miles: cityTarget.miles } : { state }),
       total_scraped: prospects.length,
       total_saved: totalSaved,
     });
@@ -115,15 +120,17 @@ export async function runScout(clientId, niche, state) {
 // ─── Google Maps Scraper ──────────────────────────────────────────────────────
 
 /**
- * Searches Google Maps for businesses matching niche + state.
- * Returns an array of raw prospect objects.
+ * Searches Google Maps for businesses matching niche + location.
+ * location may be a state abbreviation ("TX") or a ZIP code ("77002").
  */
-async function scrapeGoogleMaps(context, niche, state, limit) {
+async function scrapeGoogleMaps(context, niche, location, limit) {
   const page = await context.newPage();
   const results = [];
 
   try {
-    const query = encodeURIComponent(`${niche} businesses in ${state}`);
+    const isZip = /^\d{5}$/.test(location);
+    const queryStr = isZip ? `${niche} near ${location}` : `${niche} businesses in ${location}`;
+    const query = encodeURIComponent(queryStr);
     await page.goto(`https://www.google.com/maps/search/${query}`, {
       waitUntil: 'networkidle',
       timeout: 30000,
@@ -143,7 +150,7 @@ async function scrapeGoogleMaps(context, niche, state, limit) {
       .locator('a[href*="/maps/place/"]')
       .evaluateAll((els) => [...new Set(els.map((el) => el.href))]);
 
-    console.log(`[Scout:GoogleMaps] Found ${listingLinks.length} listing links.`);
+    console.log(`[Scout:GoogleMaps] Found ${listingLinks.length} listing links for "${queryStr}".`);
 
     for (const link of listingLinks) {
       if (results.length >= limit) break;
@@ -226,16 +233,17 @@ async function scrapeGoogleMapsListing(context, url) {
 // ─── Yelp Scraper ─────────────────────────────────────────────────────────────
 
 /**
- * Searches Yelp for businesses matching niche + state.
+ * Searches Yelp for businesses matching niche + location.
+ * location may be a state abbreviation ("TX") or a ZIP code ("77002").
  */
-async function scrapeYelp(context, niche, state, limit) {
+async function scrapeYelp(context, niche, location, limit) {
   const page = await context.newPage();
   const results = [];
 
   try {
-    // Yelp search URL format
+    // Yelp accepts both state names and ZIP codes in find_loc
     const find_desc = encodeURIComponent(niche);
-    const find_loc = encodeURIComponent(state);
+    const find_loc = encodeURIComponent(location);
     const url = `https://www.yelp.com/search?find_desc=${find_desc}&find_loc=${find_loc}`;
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -494,14 +502,22 @@ function normalizeUrl(url) {
 if (process.argv[1].endsWith('scout.js')) {
   const clientId = process.env.CLIENT_ID;
   const niche = process.env.NICHE || 'plumbing';
-  const state = process.env.STATE || 'TX';
+  const state = process.env.STATE || null;
+  const zip   = process.env.ZIP   || null;
+  const miles = parseInt(process.env.MILES || '25', 10);
+  const cityTarget = zip ? { zip, miles } : null;
 
   if (!clientId) {
     console.error('Usage: CLIENT_ID=<uuid> NICHE=plumbing STATE=TX node agents/scout.js');
+    console.error('       CLIENT_ID=<uuid> NICHE=plumbing ZIP=77002 MILES=25 node agents/scout.js');
+    process.exit(1);
+  }
+  if (!state && !zip) {
+    console.error('Provide STATE or ZIP (with optional MILES) to set the search location.');
     process.exit(1);
   }
 
-  runScout(clientId, niche, state)
+  runScout(clientId, niche, state, cityTarget)
     .then((result) => {
       console.log(`[Scout] Done. ${result.totalSaved} new prospects saved.`);
       process.exit(0);

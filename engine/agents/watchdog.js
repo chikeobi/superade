@@ -12,12 +12,14 @@
 
 import axios from 'axios';
 import cron from 'node-cron';
+import Stripe from 'stripe';
 import { supabase } from '../lib/supabase.js';
 import 'dotenv/config';
 
-// ─── Clients ──────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const INSTANTLY_BASE = 'https://api.instantly.ai/api/v2';
+const TIER_QUOTAS = { starter: 500, growth: 1000, scale: 2000 };
 const iHeaders = () => ({
   Authorization: `Bearer ${process.env.INSTANTLY_API_KEY}`,
   'Content-Type': 'application/json',
@@ -36,10 +38,20 @@ export async function handleStripeEvent(event) {
   console.log(`[Watchdog] Stripe event: ${event.type}`);
 
   switch (event.type) {
-    case 'checkout.session.completed':
+    case 'checkout.session.completed': {
+      // Initial purchase — create or update the client row with correct tier + Stripe IDs.
+      const clientId = await provisionClient(event.data.object);
+      if (clientId) {
+        await logEvent(clientId, null, 'subscription.created', {
+          stripe_event_id: event.id,
+          stripe_customer_id: event.data.object.customer,
+        });
+      }
+      break;
+    }
     case 'invoice.payment_succeeded': {
-      const customerId =
-        event.data.object.customer || event.data.object.customer_id;
+      // Recurring payment — just ensure billing_status stays active.
+      const customerId = event.data.object.customer || event.data.object.customer_id;
       await handlePaymentSuccess(customerId, event);
       break;
     }
@@ -51,6 +63,91 @@ export async function handleStripeEvent(event) {
     default:
       console.log(`[Watchdog] Unhandled Stripe event: ${event.type}`);
   }
+}
+
+/**
+ * Maps a Stripe price ID to one of our tier names.
+ * Falls back to 'starter' for unknown price IDs.
+ */
+function resolveTier(priceId) {
+  if (!priceId) return 'starter';
+  if (priceId === process.env.STRIPE_PRICE_GROWTH) return 'growth';
+  if (priceId === process.env.STRIPE_PRICE_SCALE)  return 'scale';
+  return 'starter'; // covers STRIPE_PRICE_STARTER + any unrecognised IDs
+}
+
+/**
+ * Called when checkout.session.completed fires.
+ * Creates a new client row or updates an existing one (matched by email).
+ * Returns the Supabase client UUID, or null on failure.
+ */
+async function provisionClient(session) {
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+  // Expand line_items so we can read the price ID and determine tier
+  let priceId;
+  try {
+    const expanded = await stripe.checkout.sessions.retrieve(session.id, {
+      expand: ['line_items'],
+    });
+    priceId = expanded.line_items?.data?.[0]?.price?.id;
+  } catch (err) {
+    console.error('[Watchdog] Could not expand checkout session:', err.message);
+  }
+
+  const tier  = resolveTier(priceId);
+  const email = (session.customer_details?.email || session.customer_email)?.toLowerCase().trim();
+  const name  = session.customer_details?.name?.trim() || 'New Client';
+  const stripeCustomerId      = session.customer;
+  const stripeSubscriptionId  = session.subscription || null;
+
+  if (!email) {
+    console.error('[Watchdog] checkout.session.completed has no customer email — skipping provisioning.');
+    return null;
+  }
+
+  // Upsert on email — idempotent if the onboarding form was filled first
+  const { data: existing } = await supabase
+    .from('clients')
+    .select('id')
+    .eq('email', email)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase.from('clients').update({
+      stripe_customer_id:     stripeCustomerId,
+      stripe_subscription_id: stripeSubscriptionId,
+      tier,
+      monthly_quota:   TIER_QUOTAS[tier],
+      billing_status:  'active',
+      is_paused:       false,
+    }).eq('id', existing.id);
+
+    console.log(`[Watchdog] Updated existing client on checkout: ${email} → ${tier}`);
+    return existing.id;
+  }
+
+  const { data: created, error } = await supabase
+    .from('clients')
+    .insert({
+      name,
+      email,
+      tier,
+      monthly_quota:          TIER_QUOTAS[tier],
+      stripe_customer_id:     stripeCustomerId,
+      stripe_subscription_id: stripeSubscriptionId,
+      billing_status:         'active',
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('[Watchdog] Failed to provision client:', error.message);
+    return null;
+  }
+
+  console.log(`[Watchdog] Provisioned new client: ${email} → ${tier}`);
+  return created.id;
 }
 
 async function handlePaymentSuccess(stripeCustomerId, event) {

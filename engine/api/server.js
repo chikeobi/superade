@@ -12,7 +12,11 @@
 
 import express from 'express';
 import { stripeWebhookHandler } from './stripe-webhook.js';
+import { onboardingRouter } from './onboarding.js';
+import { adminRouter } from './admin.js';
+import { legalRouter } from './legal.js';
 import { startInstantlyPoller } from '../agents/watchdog.js';
+import { startScheduler } from '../lib/scheduler.js';
 import 'dotenv/config';
 
 const app = express();
@@ -24,6 +28,15 @@ app.post(
   express.raw({ type: 'application/json' }),
   stripeWebhookHandler
 );
+
+// ─── Client onboarding form ───────────────────────────────────────────────────
+app.use('/onboarding', onboardingRouter);
+
+// ─── Admin dashboard ──────────────────────────────────────────────────────────
+app.use('/admin', adminRouter);
+
+// ─── Legal pages ─────────────────────────────────────────────────────────────
+app.use('/', legalRouter);
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
@@ -37,4 +50,7 @@ app.listen(PORT, () => {
 
   // Start polling Instantly for replies/bounces/unsubscribes every 2 hours
   startInstantlyPoller();
+
+  // Start the hourly campaign scheduler (auto-fires Scout → Brain → Connector)
+  startScheduler();
 });

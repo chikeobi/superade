@@ -1,0 +1,163 @@
+{
+  "_comment": "Seed config for the discovery agent. Edit freely — no code changes needed. Add/remove niches or cities here and re-run discovery.",
+
+  "niches": [
+    {
+      "name": "Emergency Plumber",
+      "search_keywords": ["emergency plumber", "24 hour plumber", "plumber near me"],
+      "avg_ticket_usd": 350,
+      "seasonal_peaks": [12, 1, 2],
+      "off_peak_months": [6, 7, 8],
+      "seasonal_notes": "Peaks winter due to frozen and burst pipes. Year-round demand in warm climates but spikes sharply in cold-winter cities. Pipe freeze risk irrelevant in Phoenix or Miami — weight winter signal only for cities with real freezes."
+    },
+    {
+      "name": "HVAC",
+      "search_keywords": ["HVAC repair", "AC repair near me", "heating and cooling", "air conditioner repair"],
+      "avg_ticket_usd": 600,
+      "seasonal_peaks": [6, 7, 8, 12, 1],
+      "off_peak_months": [3, 4, 10, 11],
+      "seasonal_notes": "Two peaks: summer (AC failure in heat) and winter (heating failure in cold). Shoulder months March-April and October-November are slow. In hot desert climates like Phoenix, summer peak is extreme — AC failure is an emergency."
+    },
+    {
+      "name": "Water Damage Restoration",
+      "search_keywords": ["water damage restoration", "flood cleanup near me", "water damage repair", "basement flooding"],
+      "avg_ticket_usd": 3500,
+      "seasonal_peaks": [6, 7, 8, 9, 10],
+      "off_peak_months": [2, 3, 4],
+      "seasonal_notes": "Hurricane and flood season June-October dominates coastal markets. Pipe bursts add a secondary winter peak in cold cities. Extremely high avg ticket — even 2-3 leads/month per vendor pays well."
+    },
+    {
+      "name": "Tree Removal",
+      "search_keywords": ["tree removal near me", "tree cutting service", "emergency tree removal", "tree trimming"],
+      "avg_ticket_usd": 800,
+      "seasonal_peaks": [3, 4, 5, 9, 10, 11],
+      "off_peak_months": [1, 2],
+      "seasonal_notes": "Spring and fall are prime: pre-storm prep and post-storm cleanup. Storm events (hurricanes, tornadoes, ice storms) create massive emergency demand spikes. Deep winter is slow in cold climates. Year-round in warm climates."
+    },
+    {
+      "name": "Junk Removal",
+      "search_keywords": ["junk removal near me", "junk hauling", "furniture removal", "debris removal"],
+      "avg_ticket_usd": 250,
+      "seasonal_peaks": [3, 4, 5, 6, 9, 10],
+      "off_peak_months": [1, 2],
+      "seasonal_notes": "Peaks spring and fall moving seasons. Very high lead volume in dense urban areas with high housing turnover. Lower avg ticket but high frequency — vendors want volume. Best in high-density metros."
+    },
+    {
+      "name": "Roofing",
+      "search_keywords": ["roofing contractor near me", "roof repair", "roof replacement", "roofing company"],
+      "avg_ticket_usd": 9000,
+      "seasonal_peaks": [4, 5, 6, 9, 10],
+      "off_peak_months": [12, 1, 2],
+      "seasonal_notes": "Highest avg ticket of all niches. Post-storm seasons drive massive demand — hail, wind, and hurricane damage are primary drivers. Slows in deep winter (snow climates) and extreme summer heat. Insurance-driven jobs mean high avg ticket."
+    },
+    {
+      "name": "Med Spa",
+      "search_keywords": ["med spa near me", "botox near me", "laser hair removal", "med spa treatments"],
+      "avg_ticket_usd": 450,
+      "seasonal_peaks": [4, 5, 6, 11, 12],
+      "off_peak_months": [1, 2, 8, 9],
+      "seasonal_notes": "Pre-summer spike April-June (body treatments, laser, weight loss). Pre-holiday spike November-December (facials, injectables). Slow in January-February post-holiday and late summer. Best in high-income suburbs and affluent urban markets."
+    },
+    {
+      "name": "Personal Injury Lawyer",
+      "search_keywords": ["personal injury lawyer near me", "car accident attorney", "injury attorney", "accident lawyer"],
+      "avg_ticket_usd": 5000,
+      "seasonal_peaks": [5, 6, 7, 8],
+      "off_peak_months": [],
+      "seasonal_notes": "Summer peaks due to increased car accidents, motorcycle accidents, and outdoor injuries. Consistent year-round demand — no true off-season. High CPCs on Google Ads indicate lead buyers pay well. Very competitive market but high willingness-to-pay for qualified leads."
+    }
+  ],
+
+  "seed_cities": [
+    {
+      "city": "Houston",
+      "state": "TX",
+      "estimated_population": 2300000,
+      "climate_zone": "humid subtropical",
+      "growth_rate": "high",
+      "income_level": "moderate-high",
+      "notes": "Largest city in TX and 4th largest in US. Major hurricane and flood risk (Harvey 2017). Very hot summers. Wide economic spread — oil/gas wealth alongside large working-class population. High demand for water damage, HVAC, roofing, and emergency plumber."
+    },
+    {
+      "city": "Dallas",
+      "state": "TX",
+      "estimated_population": 1300000,
+      "climate_zone": "humid subtropical",
+      "growth_rate": "high",
+      "income_level": "moderate-high",
+      "notes": "Major metro with cold winters and very hot summers. Tornado alley — significant storm damage risk for tree removal and roofing. Large sprawling suburbs (Plano, Frisco, Allen) with high homeownership rates."
+    },
+    {
+      "city": "Austin",
+      "state": "TX",
+      "estimated_population": 1000000,
+      "climate_zone": "semi-arid subtropical",
+      "growth_rate": "very high",
+      "income_level": "high",
+      "notes": "Fastest-growing major city in the US. Tech-driven economy with high incomes. The 2021 winter freeze caused catastrophic plumber and HVAC demand — locals are now primed to search for emergency services. Less competitive than Houston/Dallas due to newer market."
+    },
+    {
+      "city": "Miami",
+      "state": "FL",
+      "estimated_population": 450000,
+      "climate_zone": "tropical",
+      "growth_rate": "high",
+      "income_level": "mixed",
+      "notes": "Tropical climate — no real winter. Hurricane risk is extreme (June-November). Very strong demand for water damage and roofing after storms. Year-round AC demand. High real estate values. Diverse population. Significant Spanish-speaking market."
+    },
+    {
+      "city": "Atlanta",
+      "state": "GA",
+      "estimated_population": 500000,
+      "climate_zone": "humid subtropical",
+      "growth_rate": "high",
+      "income_level": "moderate-high",
+      "notes": "Major southeast hub. Hot humid summers with strong HVAC demand. Occasional ice storms cause pipe damage. Growing tech and corporate presence driving higher incomes. Large surrounding metro (5M+ MSA) expands the market substantially."
+    },
+    {
+      "city": "Phoenix",
+      "state": "AZ",
+      "estimated_population": 1600000,
+      "climate_zone": "hot desert",
+      "growth_rate": "very high",
+      "income_level": "moderate",
+      "notes": "Extreme summer heat — AC failure is a genuine emergency in 115°F weather. Monsoon season July-September brings flooding and water damage. Fast-growing retirement and tech population. HVAC is the single biggest niche here."
+    },
+    {
+      "city": "Chicago",
+      "state": "IL",
+      "estimated_population": 2700000,
+      "climate_zone": "humid continental",
+      "growth_rate": "flat",
+      "income_level": "moderate-high",
+      "notes": "Third largest US city. Harsh winters — frozen pipes, burst pipes, and heating emergencies are common. Very large market but more competitive than southern cities. High homeownership in surrounding suburbs."
+    },
+    {
+      "city": "Los Angeles",
+      "state": "CA",
+      "estimated_population": 4000000,
+      "climate_zone": "Mediterranean",
+      "growth_rate": "flat",
+      "income_level": "high",
+      "notes": "Second largest US city. Mild climate but enormous population = large absolute market. Very high CPCs on Google Ads — advertisers are paying, meaning qualified traffic is valuable. Highly competitive lead-gen market. Best opportunities in outer suburbs."
+    },
+    {
+      "city": "New York",
+      "state": "NY",
+      "estimated_population": 8300000,
+      "climate_zone": "humid continental",
+      "growth_rate": "flat",
+      "income_level": "high",
+      "notes": "Largest US city. Massive market but extremely competitive. Very high CPCs — lead buyers pay premium rates. Focus on boroughs outside Manhattan and Long Island suburbs where homeownership is higher and lead-gen competition thinner."
+    },
+    {
+      "city": "Charlotte",
+      "state": "NC",
+      "estimated_population": 900000,
+      "climate_zone": "humid subtropical",
+      "growth_rate": "very high",
+      "income_level": "moderate-high",
+      "notes": "One of the fastest-growing metros in the Southeast. Banking and finance center attracting high-income transplants. Mix of all four seasons — real winter cold, hot summers. Less saturated lead-gen market vs. tier-1 cities. Strong opportunity across multiple niches."
+    }
+  ]
+}

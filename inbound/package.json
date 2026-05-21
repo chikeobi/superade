@@ -1,0 +1,26 @@
+{
+  "name": "superade-inbound",
+  "version": "1.0.0",
+  "description": "Superade inbound lead generation engine — separate from outbound /engine",
+  "type": "module",
+  "scripts": {
+    "discovery": "node scripts/run-discovery.js",
+    "site-factory": "node scripts/run-site-factory.js",
+    "traffic": "node scripts/run-traffic.js",
+    "optimizer": "node scripts/run-optimizer.js",
+    "server": "node api/inbound-server.js",
+    "admin": "node api/inbound-server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5",
+    "playwright": "^1.47.0",
+    "express": "^4.21.0",
+    "stripe": "^16.10.0",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

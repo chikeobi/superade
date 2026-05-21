@@ -199,7 +199,7 @@ async function writeEmail(prospect, client, profile, websiteContent) {
  * Builds the system prompt from the client's style profile.
  */
 function buildSystemPrompt(profile) {
-  return `You are an expert cold email copywriter specializing in B2B outreach to local service businesses.
+  return `You are an expert cold email copywriter specializing in outreach for professional service firms — including medical and dental practices, law firms, financial advisors, real estate professionals, specialist contractors, and consultants.
 
 Your writing style:
 - Tone: ${profile.tone}
@@ -208,7 +208,7 @@ Your writing style:
 - CTA style: ${profile.cta_style}
 - Things to avoid: ${profile.avoid?.join(', ') || 'none'}
 
-You write emails that feel personal, not like mass blasts. You reference specific details about the business.
+You write emails that feel personal, not like mass blasts. You reference specific details about the prospect.
 You never use generic openers like "I hope this email finds you well."
 You always write from the perspective of ${profile.sender_persona}.
 
@@ -227,11 +227,11 @@ function buildUserPrompt(prospect, client, profile, websiteContent) {
     ? `\n\nWebsite content (summarized):\n"""\n${websiteContent.slice(0, 2000)}\n"""`
     : '\n\n(No website content available.)';
 
-  return `Write a cold outreach email to this local business:
+  return `Write a cold outreach email to this prospect:
 
 Business name: ${prospect.business_name}
-Owner name: ${prospect.owner_name || 'unknown'}
-Niche: ${prospect.niche || client.target_niche}
+Contact name: ${prospect.owner_name || 'unknown'}
+Practice / industry: ${prospect.niche || client.target_niche}
 Location: ${[prospect.city, prospect.state].filter(Boolean).join(', ') || 'US'}
 Website: ${prospect.website || 'none'}
 ${websiteSection}

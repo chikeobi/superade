@@ -59,13 +59,32 @@ export async function runConnector(clientId, campaignId) {
   const instantlyCampaignId = await ensureInstantlyCampaign(campaign);
   console.log(`[Connector] Instantly campaign ID: ${instantlyCampaignId}`);
 
+  // Enforce the client's daily send cap
+  const { data: clientData } = await supabase
+    .from('clients').select('daily_send_limit').eq('id', clientId).single();
+  const dailyLimit = clientData?.daily_send_limit ?? 100;
+  const todayUTC   = new Date().toISOString().slice(0, 10);
+  const { count: sentToday } = await supabase
+    .from('emails')
+    .select('id', { count: 'exact', head: true })
+    .eq('campaign_id', campaignId)
+    .eq('status', 'sent')
+    .gte('sent_at', `${todayUTC}T00:00:00Z`);
+  const canSend = Math.max(0, dailyLimit - (sentToday || 0));
+  if (canSend === 0) {
+    console.log(`[Connector] Daily send limit (${dailyLimit}) reached — skipping.`);
+    return { pushed: 0 };
+  }
+  const batchLimit = Math.min(BATCH_SIZE, canSend);
+  console.log(`[Connector] Daily cap: ${sentToday || 0}/${dailyLimit} sent today. Sending up to ${batchLimit} now.`);
+
   // Fetch approved emails for this campaign
   const { data: emails, error: emailErr } = await supabase
     .from('emails')
     .select('*, prospects(*)')
     .eq('campaign_id', campaignId)
     .eq('status', 'approved')
-    .limit(BATCH_SIZE);
+    .limit(batchLimit);
 
   if (emailErr) throw new Error(`[Connector] DB error: ${emailErr.message}`);
   if (!emails || emails.length === 0) {
