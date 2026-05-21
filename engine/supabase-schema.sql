@@ -73,11 +73,11 @@ create table prospects (
                       'discovered',   -- scraped, not yet researched
                       'researched',   -- Brain has run, email drafted
                       'approved',     -- operator approved the draft
-                      'queued',       -- pushed to Saleshandy
+                      'queued',       -- pushed to Instantly
                       'sent',         -- first email delivered
                       'replied',      -- positive reply received
                       'converted',    -- Stripe payment detected
-                      'bounced',      -- hard bounce from Saleshandy
+                      'bounced',      -- hard bounce from Instantly
                       'unsubscribed', -- unsubscribe request
                       'skipped'       -- operator manually skipped
                     )),
@@ -95,7 +95,7 @@ create index prospects_email_hash on prospects(email_hash);
 -- ============================================================
 -- CAMPAIGNS
 -- A campaign groups prospects for one client in one month.
--- Maps 1-to-1 with a Saleshandy campaign.
+-- Maps 1-to-1 with an Instantly campaign.
 -- ============================================================
 create table campaigns (
   id              uuid primary key default gen_random_uuid(),
@@ -104,7 +104,7 @@ create table campaigns (
   client_id       uuid not null references clients(id) on delete cascade,
   name            text not null,            -- e.g. "Acme HVAC – Apr 2025"
   month           text not null,            -- e.g. "2025-04"
-  saleshandy_campaign_id text,              -- ID from Saleshandy API
+  saleshandy_campaign_id text,              -- ID from Instantly API (column name kept for backwards compat)
   status          text not null default 'building'
                     check (status in ('building', 'active', 'paused', 'completed')),
   follow_up_count int not null default 4    -- number of follow-up steps
@@ -135,13 +135,13 @@ create table emails (
                       'draft',      -- written by Brain, awaiting review
                       'approved',   -- operator approved
                       'rejected',   -- operator rejected (Brain will rewrite)
-                      'sent',       -- pushed to Saleshandy and sent
-                      'failed'      -- Saleshandy returned an error
+                      'sent',       -- pushed to Instantly and sent
+                      'failed'      -- Instantly returned an error
                     )),
   approved_at     timestamptz,
   sent_at         timestamptz,
 
-  -- Saleshandy tracking
+  -- Instantly lead tracking (column name kept for backwards compat)
   saleshandy_email_id text,
 
   -- LLM metadata (for debugging + cost tracking)
@@ -179,7 +179,7 @@ create table events (
   -- System events:     'quota.reset', 'campaign.created', 'report.generated', 'error'
 
   payload         jsonb,        -- full raw webhook body or structured metadata
-  source          text          -- e.g. 'scout', 'brain', 'stripe', 'saleshandy'
+  source          text          -- e.g. 'scout', 'brain', 'stripe', 'instantly'
 );
 
 create index events_client on events(client_id, created_at desc);
@@ -211,5 +211,19 @@ begin
     prospects_sent_this_month = 0,
     quota_reset_at = now()
   where billing_status = 'active';
+end;
+$$;
+
+
+-- ============================================================
+-- HELPER: atomically increment prospects_sent_this_month
+-- Called by connector.js after each successful Instantly push.
+-- ============================================================
+create or replace function increment_prospects_sent(p_client_id uuid, p_count int)
+returns void language plpgsql as $$
+begin
+  update clients
+  set prospects_sent_this_month = prospects_sent_this_month + p_count
+  where id = p_client_id;
 end;
 $$;

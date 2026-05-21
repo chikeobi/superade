@@ -31,7 +31,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const BATCH_SIZE = 20;
 
 // Claude model to use for email writing
-const MODEL = 'claude-opus-4-6';
+const MODEL = 'claude-opus-4-7';
 
 
 // ─── Main entry point ─────────────────────────────────────────────────────────

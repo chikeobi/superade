@@ -1,15 +1,16 @@
 /**
- * connector.js — Saleshandy Integration Agent
+ * connector.js — Instantly Integration Agent
  *
  * Reads 'approved' email drafts from Supabase and pushes them into
- * Saleshandy campaigns via the Saleshandy API. Creates campaigns if
- * they don't exist yet, adds prospects as leads, and assigns email
- * copy to the correct sequence step.
+ * Instantly campaigns via the Instantly API v2. Creates campaigns if
+ * they don't exist yet, then adds prospects as leads with their
+ * Brain-written email copy injected as custom variables.
+ *
+ * The campaign sequence template uses {{subject}} and {{body}} so each
+ * lead receives its own fully personalized email at send time.
  *
  * Usage:
  *   CLIENT_ID=<uuid> CAMPAIGN_ID=<uuid> node agents/connector.js
- *
- * Saleshandy API docs: https://app.saleshandy.com/api-docs
  */
 
 import axios from 'axios';
@@ -18,10 +19,9 @@ import 'dotenv/config';
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 
-// Saleshandy base URL and auth header
-const SH_BASE = 'https://api.saleshandy.com/api/v1';
-const shHeaders = () => ({
-  'X-Auth-Token': process.env.SALESHANDY_API_KEY,
+const INSTANTLY_BASE = 'https://api.instantly.ai/api/v2';
+const iHeaders = () => ({
+  Authorization: `Bearer ${process.env.INSTANTLY_API_KEY}`,
   'Content-Type': 'application/json',
 });
 
@@ -36,7 +36,7 @@ const API_DELAY_MS = 300;
 // ─── Main entry point ─────────────────────────────────────────────────────────
 
 /**
- * Push approved emails from one Supabase campaign into Saleshandy.
+ * Push approved emails from one Supabase campaign into Instantly.
  *
  * @param {string} clientId    - Supabase client UUID
  * @param {string} campaignId  - Supabase campaign UUID
@@ -53,9 +53,11 @@ export async function runConnector(clientId, campaignId) {
 
   if (campErr || !campaign) throw new Error(`[Connector] Campaign not found: ${campaignId}`);
 
-  // Ensure there's a matching Saleshandy campaign — create if needed
-  const shCampaignId = await ensureSaleshandyCampaign(campaign);
-  console.log(`[Connector] Saleshandy campaign ID: ${shCampaignId}`);
+  // Ensure there's a matching Instantly campaign — create if needed.
+  // saleshandy_campaign_id column is reused to store the Instantly campaign ID
+  // without requiring a schema migration.
+  const instantlyCampaignId = await ensureInstantlyCampaign(campaign);
+  console.log(`[Connector] Instantly campaign ID: ${instantlyCampaignId}`);
 
   // Fetch approved emails for this campaign
   const { data: emails, error: emailErr } = await supabase
@@ -71,13 +73,13 @@ export async function runConnector(clientId, campaignId) {
     return { pushed: 0 };
   }
 
-  console.log(`[Connector] Pushing ${emails.length} emails to Saleshandy.`);
+  console.log(`[Connector] Pushing ${emails.length} emails to Instantly.`);
 
   let pushed = 0;
 
   for (const email of emails) {
     try {
-      await pushEmail(email, shCampaignId);
+      await pushEmail(email, instantlyCampaignId);
       pushed++;
     } catch (err) {
       console.error(`[Connector] Failed on email ${email.id}: ${err.message}`);
@@ -89,96 +91,140 @@ export async function runConnector(clientId, campaignId) {
     await sleep(API_DELAY_MS);
   }
 
+  // Update the client's monthly send counter so Scout's quota check stays accurate
+  if (pushed > 0) {
+    await supabase.rpc('increment_prospects_sent', {
+      p_client_id: clientId,
+      p_count: pushed,
+    });
+  }
+
   console.log(`[Connector] Done. Pushed ${pushed} emails.`);
   return { pushed };
 }
 
 
-// ─── Saleshandy: ensure campaign exists ──────────────────────────────────────
+// ─── Instantly: ensure campaign exists ────────────────────────────────────────
 
 /**
- * Checks if this Supabase campaign already has a Saleshandy campaign ID.
- * If not, creates a new Saleshandy campaign and stores the ID.
- * Returns the Saleshandy campaign ID string.
+ * Checks if this Supabase campaign already has an Instantly campaign ID.
+ * If not, creates a new Instantly campaign with a sequence template that
+ * accepts {{subject}} and {{body}} custom variables per lead.
+ * Returns the Instantly campaign ID string.
  */
-async function ensureSaleshandyCampaign(campaign) {
-  // Already linked — reuse existing Saleshandy campaign
+async function ensureInstantlyCampaign(campaign) {
+  // Already linked — reuse existing Instantly campaign
   if (campaign.saleshandy_campaign_id) {
     return campaign.saleshandy_campaign_id;
   }
 
-  // Create a new campaign in Saleshandy
-  const response = await shPost('/campaign', {
+  // Create the campaign. The sequence template uses {{subject}}/{{body}} so
+  // Brain's fully personalized copy is injected per-lead at send time.
+  const data = await iPost('/campaigns', {
     name: campaign.name,
-    type: 'EMAIL',
-    dailySendingLimit: 50,
-    trackingEnabled: true,
+    sequences: [
+      {
+        steps: [
+          {
+            type: 'email',
+            delay: 0,
+            variants: [
+              {
+                subject: '{{subject}}',
+                body: '{{body}}',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    campaign_schedule: {
+      schedules: [
+        {
+          name: 'Business Hours',
+          timing: { from: '08:00', to: '17:00' },
+          days: {
+            sun: false,
+            mon: true,
+            tue: true,
+            wed: true,
+            thu: true,
+            fri: true,
+            sat: false,
+          },
+          timezone: 'America/New_York',
+        },
+      ],
+    },
   });
 
-  const shCampaignId = response.data?.campaign?.id;
-  if (!shCampaignId) {
-    throw new Error(`[Connector] Saleshandy campaign create returned no ID.`);
+  const instantlyId = data?.id;
+  if (!instantlyId) {
+    throw new Error('[Connector] Instantly campaign create returned no ID.');
   }
 
-  // Save the Saleshandy campaign ID back to Supabase
+  // Persist the Instantly campaign ID so future runs skip creation
   await supabase
     .from('campaigns')
-    .update({ saleshandy_campaign_id: String(shCampaignId), status: 'active' })
+    .update({ saleshandy_campaign_id: String(instantlyId), status: 'active' })
     .eq('id', campaign.id);
 
-  return String(shCampaignId);
+  console.log(`[Connector] Created Instantly campaign: ${campaign.name}`);
+  return String(instantlyId);
 }
 
 
-// ─── Push one email to Saleshandy ─────────────────────────────────────────────
+// ─── Push one email to Instantly ─────────────────────────────────────────────
 
 /**
- * Adds a prospect as a lead in Saleshandy and assigns the email copy.
- * Marks the email and prospect as 'sent' in Supabase on success.
+ * Adds a prospect as a lead in the Instantly campaign, injecting the
+ * Brain-written subject and body as custom variables.
+ * Marks the email and prospect as 'queued' in Supabase on success.
  */
-async function pushEmail(email, shCampaignId) {
+async function pushEmail(email, instantlyCampaignId) {
   const prospect = email.prospects;
   if (!prospect?.email) {
     throw new Error('Prospect has no email address.');
   }
 
-  // Step 1: Add the prospect as a lead to the Saleshandy campaign
-  const leadResponse = await shPost(`/campaign/${shCampaignId}/lead`, {
-    email: prospect.email,
-    firstName: prospect.owner_name?.split(' ')[0] || '',
-    lastName: prospect.owner_name?.split(' ').slice(1).join(' ') || '',
-    phone: prospect.phone || '',
-    website: prospect.website || '',
-    companyName: prospect.business_name,
-    customVariables: {
-      business_name: prospect.business_name,
-      niche: prospect.niche || '',
-      city: prospect.city || '',
-      state: prospect.state || '',
-    },
-    // Attach the email copy for step 0 (initial outreach)
-    emailTemplates: [
+  const [firstName = '', ...lastParts] = (prospect.owner_name || '').split(' ');
+  const lastName = lastParts.join(' ');
+
+  const data = await iPost('/leads/add-leads-in-bulk', {
+    campaign_id: instantlyCampaignId,
+    leads: [
       {
-        step: 1, // Saleshandy uses 1-based step numbers
-        subject: email.subject,
-        body: email.body,
+        email: prospect.email,
+        first_name: firstName,
+        last_name: lastName,
+        company_name: prospect.business_name,
+        custom_variables: {
+          subject: email.subject,
+          body: email.body,
+          business_name: prospect.business_name,
+          niche: prospect.niche || '',
+          city: prospect.city || '',
+          state: prospect.state || '',
+        },
       },
     ],
   });
 
-  const shEmailId = leadResponse.data?.lead?.id;
+  // Store the Instantly lead ID for cross-reference (column repurposed from Saleshandy)
+  const instantlyLeadId =
+    data?.leads?.[0]?.id ?? data?.results?.[0]?.id ?? null;
 
-  // Step 2: Update the email record in Supabase
+  // Mark the email as sent
   await supabase
     .from('emails')
     .update({
       status: 'sent',
       sent_at: new Date().toISOString(),
-      saleshandy_email_id: shEmailId ? String(shEmailId) : null,
+      saleshandy_email_id: instantlyLeadId ? String(instantlyLeadId) : null,
     })
     .eq('id', email.id);
 
-  // Step 3: Update the prospect status
+  // Advance the prospect to 'queued' (in Instantly's send queue)
   await supabase
     .from('prospects')
     .update({ status: 'queued' })
@@ -188,37 +234,24 @@ async function pushEmail(email, shCampaignId) {
 }
 
 
-// ─── Saleshandy API helpers ───────────────────────────────────────────────────
+// ─── Instantly API helpers ────────────────────────────────────────────────────
 
 /**
- * POST to Saleshandy API. Returns the response data.
+ * POST to Instantly API v2. Returns the response data.
  */
-async function shPost(path, body) {
+async function iPost(path, body) {
   try {
-    const response = await axios.post(`${SH_BASE}${path}`, body, {
-      headers: shHeaders(),
+    const response = await axios.post(`${INSTANTLY_BASE}${path}`, body, {
+      headers: iHeaders(),
       timeout: 10000,
     });
     return response.data;
   } catch (err) {
-    const detail = err.response?.data?.message || err.message;
-    throw new Error(`Saleshandy POST ${path} failed: ${detail}`);
-  }
-}
-
-/**
- * GET from Saleshandy API. Returns the response data.
- */
-async function shGet(path) {
-  try {
-    const response = await axios.get(`${SH_BASE}${path}`, {
-      headers: shHeaders(),
-      timeout: 10000,
-    });
-    return response.data;
-  } catch (err) {
-    const detail = err.response?.data?.message || err.message;
-    throw new Error(`Saleshandy GET ${path} failed: ${detail}`);
+    const detail =
+      err.response?.data?.message ||
+      err.response?.data?.error ||
+      err.message;
+    throw new Error(`Instantly POST ${path} failed: ${detail}`);
   }
 }
 
@@ -249,7 +282,7 @@ if (process.argv[1].endsWith('connector.js')) {
 
   runConnector(clientId, campaignId)
     .then((result) => {
-      console.log(`[Connector] Done. ${result.pushed} emails pushed to Saleshandy.`);
+      console.log(`[Connector] Done. ${result.pushed} emails pushed to Instantly.`);
       process.exit(0);
     })
     .catch((err) => {

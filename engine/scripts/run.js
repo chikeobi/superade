@@ -12,7 +12,7 @@
  * Typical workflow:
  *   1. node scripts/run.js        (Scout finds prospects, Brain writes drafts)
  *   2. node scripts/approve.js    (Operator reviews + approves drafts)
- *   3. node scripts/run.js        (Connector pushes approved emails to Saleshandy)
+ *   3. node scripts/run.js        (Connector pushes approved emails to Instantly)
  */
 
 import { supabase } from '../lib/supabase.js';
@@ -93,7 +93,7 @@ async function runClientPipeline(client) {
     console.error(`[Run] Brain failed for ${client.name}: ${err.message}`);
   }
 
-  // 4. Connector — push approved emails to Saleshandy
+  // 4. Connector — push approved emails to Instantly
   let pushed = 0;
   try {
     const result = await runConnector(client.id, campaignId);
@@ -193,7 +193,7 @@ function printSummary(results) {
       console.log(`  ${r.client}: FAILED — ${r.error}`);
     } else {
       console.log(
-        `  ${r.client}: +${r.totalProspects} prospects  ${r.drafted} drafted  ${r.pushed} pushed to Saleshandy`
+        `  ${r.client}: +${r.totalProspects} prospects  ${r.drafted} drafted  ${r.pushed} pushed to Instantly`
       );
     }
   }

@@ -71,6 +71,15 @@ async function gatherStats(clientId, month) {
     1
   ).toISOString();
 
+  // Campaign breakdown — fetched first so we can use IDs to scope email counts
+  const { data: campaigns } = await supabase
+    .from('campaigns')
+    .select('id, name, status')
+    .eq('client_id', clientId)
+    .eq('month', month);
+
+  const campaignIds = (campaigns || []).map((c) => c.id);
+
   // Prospects discovered this month
   const { count: prospectCount } = await supabase
     .from('prospects')
@@ -79,13 +88,18 @@ async function gatherStats(clientId, month) {
     .gte('created_at', start)
     .lt('created_at', end);
 
-  // Emails sent
-  const { count: sentCount } = await supabase
-    .from('emails')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'sent')
-    .gte('sent_at', start)
-    .lt('sent_at', end);
+  // Emails sent — scoped to this client's campaigns to avoid cross-client counting
+  let sentCount = 0;
+  if (campaignIds.length > 0) {
+    const { count } = await supabase
+      .from('emails')
+      .select('id', { count: 'exact', head: true })
+      .in('campaign_id', campaignIds)
+      .eq('status', 'sent')
+      .gte('sent_at', start)
+      .lt('sent_at', end);
+    sentCount = count || 0;
+  }
 
   // Replies received
   const { count: replyCount } = await supabase
@@ -96,26 +110,19 @@ async function gatherStats(clientId, month) {
     .gte('created_at', start)
     .lt('created_at', end);
 
-  // Conversions (Stripe payments tied to this client's prospects)
+  // Conversions (prospects who paid after outreach)
   const { count: conversionCount } = await supabase
     .from('prospects')
     .select('id', { count: 'exact', head: true })
     .eq('client_id', clientId)
     .eq('status', 'converted');
 
-  // Campaign breakdown
-  const { data: campaigns } = await supabase
-    .from('campaigns')
-    .select('id, name, status')
-    .eq('client_id', clientId)
-    .eq('month', month);
-
   const replyRate =
     sentCount > 0 ? ((replyCount / sentCount) * 100).toFixed(1) : '0.0';
 
   return {
     prospects: prospectCount || 0,
-    sent: sentCount || 0,
+    sent: sentCount,
     replies: replyCount || 0,
     conversions: conversionCount || 0,
     replyRate,
