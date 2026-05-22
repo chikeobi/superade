@@ -239,12 +239,12 @@ create index inbound_leads_created on inbound_leads(created_at desc);
 -- ============================================================
 -- DISABLE RLS — service role only
 -- ============================================================
-alter table inbound_mode     disable row level security;
-alter table opportunities    disable row level security;
-alter table generated_sites  disable row level security;
-alter table vendors          disable row level security;
-alter table vendor_billing   disable row level security;
-alter table inbound_leads    disable row level security;
+alter table inbound_mode     enable row level security;
+alter table opportunities    enable row level security;
+alter table generated_sites  enable row level security;
+alter table vendors          enable row level security;
+alter table vendor_billing   enable row level security;
+alter table inbound_leads    enable row level security;
 
 
 -- ============================================================
@@ -286,7 +286,7 @@ create table if not exists agent_states (
   updated_at        timestamptz not null default now()
 );
 
-alter table agent_states disable row level security;
+alter table agent_states enable row level security;
 
 insert into agent_states (id, system, name, description, always_on, enabled, schedule_type, schedule_value) values
   ('outbound.scout',      'outbound', 'Scout',       'Finds prospects on Google Maps, Yelp, and directories',         false, true, 'interval', '24'),

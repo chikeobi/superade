@@ -209,7 +209,7 @@ async function runAgent(agentId) {
 
   const child = spawn('node', [script], {
     cwd:      INBOUND_DIR,
-    detached: true,
+    detached: false,
     stdio:    ['ignore', 'pipe', 'pipe'],
     env:      { ...process.env },
   });

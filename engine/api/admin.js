@@ -21,7 +21,7 @@ export const adminRouter = express.Router();
 // A fixed HMAC token derived from the password — stateless, no DB needed.
 function sessionToken() {
   return crypto
-    .createHmac('sha256', process.env.ADMIN_PASSWORD || 'unset')
+    .createHmac('sha256', process.env.ADMIN_PASSWORD || 'NEVER_ALLOW_BLANK_PASSWORD_123')
     .update('suparade-admin-session-v1')
     .digest('hex');
 }
@@ -1165,7 +1165,7 @@ adminRouter.get('/login', (req, res) => {
 
 adminRouter.post('/login', express.urlencoded({ extended: false }), (req, res) => {
   const submitted = req.body.password || '';
-  const expected  = process.env.ADMIN_PASSWORD || '';
+  const expected  = process.env.ADMIN_PASSWORD || 'NEVER_ALLOW_BLANK_PASSWORD_123';
 
   const submittedBuf = Buffer.from(submitted);
   const expectedBuf  = Buffer.from(expected);
@@ -1192,7 +1192,7 @@ adminRouter.get('/logout', (_req, res) => {
 
 function resetToken(ts) {
   return crypto
-    .createHmac('sha256', process.env.ADMIN_PASSWORD || 'unset')
+    .createHmac('sha256', process.env.ADMIN_PASSWORD || 'NEVER_ALLOW_BLANK_PASSWORD_123')
     .update(`reset-${ts}`)
     .digest('hex');
 }

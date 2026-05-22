@@ -15,7 +15,7 @@ export function getCookie(req, name) {
 
 export function sessionToken() {
   return crypto
-    .createHmac('sha256', process.env.ADMIN_PASSWORD || 'unset')
+    .createHmac('sha256', process.env.ADMIN_PASSWORD || 'NEVER_ALLOW_BLANK_PASSWORD_123')
     .update('suparade-admin-session-v1')
     .digest('hex');
 }
