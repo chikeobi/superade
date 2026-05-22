@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import { supabase } from '../lib/supabase.js';
 import { getJob, startPipeline, pauseClient, resumeClient, stopJob, sendEmails } from '../lib/job-runner.js';
 import { buildCompactAgentBar, buildAgentControlsHtml, registerAgentRoutes, startOutboundScheduler } from './admin-agents.js';
+import { registerAppointmentRoutes } from './admin-appointments.js';
 
 export const adminRouter = express.Router();
 
@@ -138,8 +139,8 @@ function loginPage(errorMsg = '', infoMsg = '') {
     ::selection{background:#1a1a1a;color:#faf9f6}
     body{font-family:'Source Serif 4',Georgia,serif;background:#faf9f6;color:#1a1a1a;min-height:100vh;display:flex;flex-direction:column}
     nav{height:64px;display:flex;align-items:center;border-bottom:1px solid #e8e5e0;background:#faf9f6}
-    .nav-inner{max-width:1100px;margin:0 auto;width:100%;padding:0 clamp(20px,4vw,48px);display:flex;align-items:center;justify-content:space-between}
-    .nav-logo{font-family:'Outfit',sans-serif;font-size:28px;font-weight:700;letter-spacing:-.8px;color:#1a1a1a;text-decoration:none}
+    .nav-inner{max-width:1200px;margin:0 auto;width:100%;padding:0 clamp(20px,4vw,48px);display:flex;align-items:center;justify-content:space-between}
+    .nav-logo{font-family:'Outfit',sans-serif;font-size:26px;font-weight:700;letter-spacing:-.8px;color:#1a1a1a;text-decoration:none}
     .nav-tag{font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:2px;background:#efece6;color:#888;padding:5px 14px;border-radius:100px}
     .center{flex:1;display:flex;align-items:center;justify-content:center;padding:40px clamp(20px,4vw,48px)}
     .box{width:100%;max-width:420px}
@@ -169,7 +170,7 @@ function loginPage(errorMsg = '', infoMsg = '') {
     .forgot-btn{width:100%;padding:13px;background:#f0ede8;color:#1a1a1a;border:none;border-radius:100px;font-family:'Outfit',sans-serif;font-size:15px;font-weight:600;cursor:pointer;transition:all .2s}
     .forgot-btn:hover{background:#e8e5e0}
     footer{border-top:1px solid #e8e5e0}
-    .footer-inner{max-width:1100px;margin:0 auto;width:100%;padding:36px clamp(20px,4vw,48px) 48px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+    .footer-inner{max-width:1200px;margin:0 auto;width:100%;padding:36px clamp(20px,4vw,48px) 48px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
     .footer-logo{font-family:'Outfit',sans-serif;font-size:18px;font-weight:700;letter-spacing:-.5px}
     .footer-links{display:flex;align-items:center;gap:24px;flex-wrap:wrap}
     .footer-link{font-family:'Outfit',sans-serif;font-size:14px;color:#888;text-decoration:none;transition:color .15s}
@@ -318,10 +319,10 @@ function dashboardPage(clients, counts, agents = []) {
     body{font-family:'Source Serif 4',Georgia,serif;background:#faf9f6;color:#1a1a1a;min-height:100vh}
     nav{position:sticky;top:0;z-index:100;height:64px;display:flex;align-items:center;background:rgba(250,249,246,.95);backdrop-filter:blur(14px);border-bottom:1px solid #e8e5e0}
     .nav-inner{max-width:1200px;margin:0 auto;width:100%;padding:0 clamp(20px,4vw,48px);display:flex;align-items:center;justify-content:space-between}
-    .nav-logo{font-family:'Outfit',sans-serif;font-size:28px;font-weight:700;letter-spacing:-.8px;color:#1a1a1a;text-decoration:none}
+    .nav-logo{font-family:'Outfit',sans-serif;font-size:26px;font-weight:700;letter-spacing:-.8px;color:#1a1a1a;text-decoration:none}
     .nav-tag{font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:2px;background:#efece6;color:#888;padding:5px 14px;border-radius:100px}
-    .nav-meta{font-family:'Outfit',sans-serif;font-size:14px;color:#999}
-    .nav-logout{font-family:'Outfit',sans-serif;font-size:14px;color:#888;text-decoration:none;transition:color .15s}
+    .nav-meta{font-family:'Outfit',sans-serif;font-size:13px;color:#bbb}
+    .nav-logout{font-family:'Outfit',sans-serif;font-size:13px;color:#888;text-decoration:none;transition:color .15s}
     .nav-logout:hover{color:#1a1a1a}
     .container{max-width:1200px;margin:0 auto;padding:0 clamp(20px,4vw,48px)}
     .page-header{padding:48px 0 40px;border-bottom:1px solid #e8e5e0}
@@ -371,9 +372,10 @@ function dashboardPage(clients, counts, agents = []) {
     <div style="display:flex;align-items:center;gap:4px">
       <a href="/admin" class="navtab navtab-on">Outbound</a>
       <a href="/admin/inbound" class="navtab navtab-off">Inbound</a>
+      <a href="/admin/appointments" class="navtab navtab-off">Appointments</a>
     </div>
     <div style="display:flex;align-items:center;gap:24px">
-      <span class="nav-meta">Updated ${now} ET</span>
+      <span class="nav-meta">${now} ET</span>
       <a href="/admin/logout" class="nav-logout">Sign out</a>
     </div>
   </div>
@@ -469,9 +471,9 @@ function clientDetailPage(client) {
     body{font-family:'Source Serif 4',Georgia,serif;background:#faf9f6;color:#1a1a1a;min-height:100vh}
     nav{position:sticky;top:0;z-index:100;height:64px;display:flex;align-items:center;background:rgba(250,249,246,.95);backdrop-filter:blur(14px);border-bottom:1px solid #e8e5e0}
     .nav-inner{max-width:1200px;margin:0 auto;width:100%;padding:0 clamp(20px,4vw,48px);display:flex;align-items:center;justify-content:space-between}
-    .nav-logo{font-family:'Outfit',sans-serif;font-size:28px;font-weight:700;letter-spacing:-.8px;color:#1a1a1a;text-decoration:none}
+    .nav-logo{font-family:'Outfit',sans-serif;font-size:26px;font-weight:700;letter-spacing:-.8px;color:#1a1a1a;text-decoration:none}
     .nav-tag{font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:2px;background:#efece6;color:#888;padding:5px 14px;border-radius:100px}
-    .nav-logout{font-family:'Outfit',sans-serif;font-size:14px;color:#888;text-decoration:none;transition:color .15s}
+    .nav-logout{font-family:'Outfit',sans-serif;font-size:13px;color:#888;text-decoration:none;transition:color .15s}
     .nav-logout:hover{color:#1a1a1a}
     .container{max-width:1200px;margin:0 auto;padding:0 clamp(20px,4vw,48px) 80px}
     .back{font-family:'Outfit',sans-serif;font-size:14px;padding:32px 0 0}
@@ -550,8 +552,12 @@ function clientDetailPage(client) {
     <div style="display:flex;align-items:center;gap:4px">
       <a href="/admin" class="navtab navtab-on">Outbound</a>
       <a href="/admin/inbound" class="navtab navtab-off">Inbound</a>
+      <a href="/admin/appointments" class="navtab navtab-off">Appointments</a>
     </div>
-    <a href="/admin/logout" class="nav-logout">Sign out</a>
+    <div style="display:flex;align-items:center;gap:20px">
+      <span class="nav-meta">${new Date().toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+      <a href="/admin/logout" class="nav-logout">Sign out</a>
+    </div>
   </div>
 </nav>
 <div class="container">
@@ -847,10 +853,10 @@ function addClientPage(errorMsg = '') {
     ::selection{background:#1a1a1a;color:#faf9f6}
     body{font-family:'Source Serif 4',Georgia,serif;background:#faf9f6;color:#1a1a1a;min-height:100vh;display:flex;flex-direction:column}
     nav{position:sticky;top:0;z-index:100;height:64px;display:flex;align-items:center;border-bottom:1px solid #e8e5e0;background:rgba(250,249,246,.95);backdrop-filter:blur(14px)}
-    .nav-inner{max-width:1100px;margin:0 auto;width:100%;padding:0 clamp(20px,4vw,48px);display:flex;align-items:center;justify-content:space-between}
-    .nav-logo{font-family:'Outfit',sans-serif;font-size:28px;font-weight:700;letter-spacing:-.8px;color:#1a1a1a;text-decoration:none}
+    .nav-inner{max-width:1200px;margin:0 auto;width:100%;padding:0 clamp(20px,4vw,48px);display:flex;align-items:center;justify-content:space-between}
+    .nav-logo{font-family:'Outfit',sans-serif;font-size:26px;font-weight:700;letter-spacing:-.8px;color:#1a1a1a;text-decoration:none}
     .nav-tag{font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:2px;background:#efece6;color:#888;padding:5px 14px;border-radius:100px}
-    .nav-logout{font-family:'Outfit',sans-serif;font-size:14px;color:#888;text-decoration:none;transition:color .15s}
+    .nav-logout{font-family:'Outfit',sans-serif;font-size:13px;color:#888;text-decoration:none;transition:color .15s}
     .nav-logout:hover{color:#1a1a1a}
     .wrap{flex:1;max-width:700px;margin:0 auto;width:100%;padding:48px clamp(20px,4vw,48px) 80px}
     .back-link{font-family:'Outfit',sans-serif;font-size:14px;margin-bottom:28px}
@@ -890,7 +896,7 @@ function addClientPage(errorMsg = '') {
     .btn-submit{font-family:'Outfit',sans-serif;font-size:15px;font-weight:600;padding:13px 28px;border-radius:100px;border:none;background:#1a1a1a;color:#faf9f6;cursor:pointer;transition:all .25s}
     .btn-submit:hover{background:#333;transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,.12)}
     footer{border-top:1px solid #e8e5e0}
-    .footer-inner{max-width:1100px;margin:0 auto;width:100%;padding:36px clamp(20px,4vw,48px) 48px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+    .footer-inner{max-width:1200px;margin:0 auto;width:100%;padding:36px clamp(20px,4vw,48px) 48px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
     .footer-logo{font-family:'Outfit',sans-serif;font-size:18px;font-weight:700;letter-spacing:-.5px}
     .footer-links{display:flex;align-items:center;gap:24px;flex-wrap:wrap}
     .footer-link{font-family:'Outfit',sans-serif;font-size:14px;color:#888;text-decoration:none;transition:color .15s}
@@ -901,7 +907,7 @@ function addClientPage(errorMsg = '') {
 </head>
 <body>
 <nav>
-  <div class="nav-inner" style="max-width:1100px">
+  <div class="nav-inner">
     <div style="display:flex;align-items:center;gap:14px">
       <a href="https://suparade.com" class="nav-logo">Suparade</a>
       <span class="nav-tag">Admin</span>
@@ -909,8 +915,12 @@ function addClientPage(errorMsg = '') {
     <div style="display:flex;align-items:center;gap:4px">
       <a href="/admin" class="navtab navtab-on">Outbound</a>
       <a href="/admin/inbound" class="navtab navtab-off">Inbound</a>
+      <a href="/admin/appointments" class="navtab navtab-off">Appointments</a>
     </div>
-    <a href="/admin/logout" class="nav-logout">Sign out</a>
+    <div style="display:flex;align-items:center;gap:20px">
+      <span class="nav-meta">${new Date().toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+      <a href="/admin/logout" class="nav-logout">Sign out</a>
+    </div>
   </div>
 </nav>
 <div class="wrap">
@@ -1054,10 +1064,10 @@ function agentsPage(agents = []) {
     body{font-family:'Source Serif 4',Georgia,serif;background:#faf9f6;color:#1a1a1a;min-height:100vh}
     nav{position:sticky;top:0;z-index:100;height:64px;display:flex;align-items:center;background:rgba(250,249,246,.95);backdrop-filter:blur(14px);border-bottom:1px solid #e8e5e0}
     .nav-inner{max-width:1200px;margin:0 auto;width:100%;padding:0 clamp(20px,4vw,48px);display:flex;align-items:center;justify-content:space-between}
-    .nav-logo{font-family:'Outfit',sans-serif;font-size:28px;font-weight:700;letter-spacing:-.8px;color:#1a1a1a;text-decoration:none}
+    .nav-logo{font-family:'Outfit',sans-serif;font-size:26px;font-weight:700;letter-spacing:-.8px;color:#1a1a1a;text-decoration:none}
     .nav-tag{font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:2px;background:#efece6;color:#888;padding:5px 14px;border-radius:100px}
-    .nav-meta{font-family:'Outfit',sans-serif;font-size:14px;color:#999}
-    .nav-logout{font-family:'Outfit',sans-serif;font-size:14px;color:#888;text-decoration:none;transition:color .15s}
+    .nav-meta{font-family:'Outfit',sans-serif;font-size:13px;color:#bbb}
+    .nav-logout{font-family:'Outfit',sans-serif;font-size:13px;color:#888;text-decoration:none;transition:color .15s}
     .nav-logout:hover{color:#1a1a1a}
     .container{max-width:1200px;margin:0 auto;padding:0 clamp(20px,4vw,48px) 80px}
     footer{}
@@ -1102,9 +1112,10 @@ function agentsPage(agents = []) {
     <div style="display:flex;align-items:center;gap:4px">
       <a href="/admin" class="navtab navtab-on">Outbound</a>
       <a href="/admin/inbound" class="navtab navtab-off">Inbound</a>
+      <a href="/admin/appointments" class="navtab navtab-off">Appointments</a>
     </div>
     <div style="display:flex;align-items:center;gap:24px">
-      <span class="nav-meta">Updated ${now} ET</span>
+      <span class="nav-meta">${now} ET</span>
       <a href="/admin/logout" class="nav-logout">Sign out</a>
     </div>
   </div>
@@ -1466,4 +1477,5 @@ adminRouter.get('/clients/:id/feed', requireAuth, async (req, res) => {
 // ─── Agent control routes + scheduler ────────────────────────────────────────
 
 registerAgentRoutes(adminRouter, requireAuth);
+registerAppointmentRoutes(adminRouter, requireAuth);
 startOutboundScheduler().catch(err => console.error('[agents:outbound] Scheduler init error:', err.message));

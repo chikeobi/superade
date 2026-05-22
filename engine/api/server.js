@@ -15,6 +15,7 @@ import { stripeWebhookHandler } from './stripe-webhook.js';
 import { onboardingRouter } from './onboarding.js';
 import { adminRouter } from './admin.js';
 import { legalRouter } from './legal.js';
+import { bookingsRouter } from './bookings.js';
 import { startInstantlyPoller } from '../agents/watchdog.js';
 import { startScheduler } from '../lib/scheduler.js';
 import 'dotenv/config';
@@ -28,6 +29,9 @@ app.post(
   express.raw({ type: 'application/json' }),
   stripeWebhookHandler
 );
+
+// ─── Public booking API (CORS-enabled for suparade.com) ──────────────────────
+app.use('/api', bookingsRouter);
 
 // ─── Client onboarding form ───────────────────────────────────────────────────
 app.use('/onboarding', onboardingRouter);

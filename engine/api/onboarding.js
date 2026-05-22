@@ -139,6 +139,13 @@ function formPage(errorMsg = '', step = 1) {
 
 <div class="wrap">
 
+  <!-- Welcome message -->
+  <div style="margin-bottom:32px">
+    <div style="font-family:'Outfit',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2.5px;color:#16a34a;margin-bottom:12px">Payment confirmed</div>
+    <h2 style="font-size:clamp(24px,4vw,32px);font-weight:400;line-height:1.15;letter-spacing:-0.5px;margin-bottom:10px">Let's finish setting up<br><em>your account.</em></h2>
+    <p style="font-family:'Outfit',sans-serif;font-size:15px;color:#888;line-height:1.6">This takes under two minutes. Tell us who you're targeting and we'll handle the rest.</p>
+  </div>
+
   <!-- Step tabs -->
   <div class="steps">
     <div class="step-tab ${step === 1 ? 'active' : 'done'}" id="tab-1">
@@ -412,5 +419,5 @@ onboardingRouter.post('/', express.urlencoded({ extended: false }), async (req, 
   }
 
   console.log(`[Onboarding] Setup complete: ${email}`);
-  res.send(successPage(name.split(' ')[0]));
+  res.redirect('https://suparade.com/success');
 });

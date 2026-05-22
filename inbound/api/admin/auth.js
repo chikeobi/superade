@@ -42,15 +42,15 @@ const FONTS = `<link href="https://fonts.googleapis.com/css2?family=Source+Serif
 const CSS = `*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}::selection{background:#1a1a1a;color:#faf9f6}
 body{font-family:'Source Serif 4',Georgia,serif;background:#faf9f6;color:#1a1a1a;min-height:100vh}
 nav{position:sticky;top:0;z-index:100;height:64px;display:flex;align-items:center;background:rgba(250,249,246,.95);backdrop-filter:blur(14px);border-bottom:1px solid #e8e5e0}
-.ni{max-width:1240px;margin:0 auto;width:100%;padding:0 clamp(20px,4vw,48px);display:flex;align-items:center;justify-content:space-between}
+.ni{max-width:1200px;margin:0 auto;width:100%;padding:0 clamp(20px,4vw,48px);display:flex;align-items:center;justify-content:space-between}
 .logo{font-family:'Outfit',sans-serif;font-size:26px;font-weight:700;letter-spacing:-.8px;color:#1a1a1a;text-decoration:none}
 .tag{font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:2px;background:#efece6;color:#888;padding:5px 14px;border-radius:100px}
 .navtab{font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;padding:6px 14px;border-radius:100px;text-decoration:none;transition:all .15s;white-space:nowrap}.navtab-on{background:#1a1a1a;color:#faf9f6}.navtab-off{color:#aaa}.navtab-off:hover{color:#1a1a1a;background:#f0ede8}
 .sn{position:sticky;top:64px;z-index:99;border-bottom:1px solid #e8e5e0;overflow-x:auto;background:rgba(250,249,246,.97);backdrop-filter:blur(10px)}
-.sni{max-width:1240px;margin:0 auto;width:100%;padding:0 clamp(20px,4vw,48px);display:flex;gap:0}
+.sni{max-width:1200px;margin:0 auto;width:100%;padding:0 clamp(20px,4vw,48px);display:flex;gap:0}
 .snl{font-family:'Outfit',sans-serif;font-size:14px;font-weight:500;color:#999;text-decoration:none;padding:12px 18px;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;display:block}
 .snl:hover,.snl.on{color:#1a1a1a}.snl.on{border-bottom-color:#1a1a1a;font-weight:600}
-.wrap{max-width:1240px;margin:0 auto;padding:0 clamp(20px,4vw,48px) 80px}
+.wrap{max-width:1200px;margin:0 auto;padding:0 clamp(20px,4vw,48px) 80px}
 .ph{padding:36px 0 28px;margin-bottom:28px;border-bottom:1px solid #e8e5e0;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .ph-left h1{font-size:clamp(28px,3.5vw,38px);font-weight:400;letter-spacing:-1px;line-height:1.1}
 .ph-left h1 em{font-style:italic}
@@ -86,7 +86,7 @@ td.r{text-align:right}tr:last-child td{border-bottom:none}tbody tr:hover td{back
 .fr{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:580px){.fr{grid-template-columns:1fr}}
 .empty{font-family:'Outfit',sans-serif;color:#bbb;text-align:center;padding:48px;font-size:15px}
 footer{border-top:1px solid #e8e5e0}
-.fi{max-width:1240px;margin:0 auto;padding:24px clamp(20px,4vw,48px) 32px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.fi{max-width:1200px;margin:0 auto;padding:24px clamp(20px,4vw,48px) 32px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
 .fl{font-family:'Outfit',sans-serif;font-size:16px;font-weight:700;letter-spacing:-.5px}
 .fc{font-family:'Outfit',sans-serif;font-size:14px;color:#888}`;
 
@@ -128,10 +128,11 @@ ${FONTS}
   <div style="display:flex;align-items:center;gap:4px">
     <a href="/admin" class="navtab navtab-off">Outbound</a>
     <a href="/admin/inbound" class="navtab navtab-on">Inbound</a>
+    <a href="/admin/appointments" class="navtab navtab-off">Appointments</a>
   </div>
   <div style="display:flex;align-items:center;gap:20px">
     <span style="font-family:'Outfit',sans-serif;font-size:13px;color:#bbb">${now} ET</span>
-    <a href="/admin/logout" style="font-family:'Outfit',sans-serif;font-size:14px;color:#888;text-decoration:none">Sign out</a>
+    <a href="/admin/logout" style="font-family:'Outfit',sans-serif;font-size:13px;color:#888;text-decoration:none">Sign out</a>
   </div>
 </div></nav>
 <div class="sn"><div class="sni">${snLinks}</div></div>

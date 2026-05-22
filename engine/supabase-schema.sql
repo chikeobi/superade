@@ -260,6 +260,47 @@ create index if not exists agent_states_system on agent_states(system);
 
 
 -- ============================================================
+-- BOOKINGS
+-- Call booking requests from prospective clients.
+-- ============================================================
+create table if not exists bookings (
+  id            uuid primary key default gen_random_uuid(),
+  name          text not null,
+  email         text not null,
+  phone         text,
+  business_type text,
+  date          date not null,
+  time_slot     text not null,   -- e.g. '10:00'
+  status        text not null default 'pending'
+                  check (status in ('pending', 'confirmed', 'cancelled')),
+  notes         text,
+  created_at    timestamptz not null default now()
+);
+
+alter table bookings enable row level security;
+create index if not exists bookings_date      on bookings(date);
+create index if not exists bookings_status_ts on bookings(status, created_at desc);
+
+
+-- ============================================================
+-- AVAILABILITY
+-- Weekly template of bookable time slots.
+-- day_of_week: 0=Sun, 1=Mon … 6=Sat
+-- time_slot:   '09:00', '09:30', '10:00' … (ET, 24h format)
+-- Seed via the admin Availability page or Supabase dashboard.
+-- ============================================================
+create table if not exists availability (
+  id           serial primary key,
+  day_of_week  int not null check (day_of_week between 0 and 6),
+  time_slot    text not null,
+  enabled      boolean not null default true,
+  unique(day_of_week, time_slot)
+);
+
+alter table availability enable row level security;
+
+
+-- ============================================================
 -- HELPER: reset monthly quotas
 -- Call this with a cron job or from reporter.js at month start.
 -- ============================================================
